@@ -1,0 +1,5 @@
+{
+  "name": "Muğla Protokol Oturma Düzeni Pro",
+  "description": "Muğla ili için gelişmiş etkinlik planlama ve protokol oturma düzeni yönetim sistemi. Supabase entegrasyonu ve Telegram duyuru desteği içerir.",
+  "requestFramePermissions": []
+}
