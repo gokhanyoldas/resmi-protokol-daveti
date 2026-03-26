@@ -1,5 +1,5 @@
 
-import { ProtocolPerson, HallConfig } from './types';
+import { ProtocolPerson, HallConfig, HallKey } from './types';
 
 export const TURKEY_CITIES = [
   "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Amasya", "Ankara", "Antalya", "Artvin", "Aydın", "Balıkesir",
@@ -11,8 +11,6 @@ export const TURKEY_CITIES = [
   "Trabzon", "Tunceli", "Şanlıurfa", "Uşak", "Van", "Yozgat", "Zonguldak", "Aksaray", "Bayburt", "Karaman",
   "Kırıkkale", "Batman", "Şırnak", "Bartın", "Ardahan", "Iğdır", "Yalova", "Karabük", "Kilis", "Osmaniye", "Düzce"
 ];
-
-export type HallKey = 'yildiz' | 'turkan' | 'msku' | 'bodrum';
 
 export const CITY_HALLS: Record<string, HallKey[]> = {
   "Muğla": ['yildiz', 'turkan', 'msku', 'bodrum'],
@@ -419,6 +417,7 @@ export const PROTOCOL_DATA: ProtocolPerson[] = [
 export const HALL_CONFIGS: Record<string, HallConfig> = {
   yildiz: {
     name: "Gazi Mustafa Kemal AKM Yıldız Kenter Salonu",
+    stage: { label: 'SAHNE', position: 'top', size: 'medium' },
     rows: [
       { row: 'A', seats: generateSeq(31) }, { row: 'B', seats: generateSeq(30) },
       { row: 'C', seats: generateSeq(31) }, { row: 'D', seats: generateSeq(30) },
@@ -435,6 +434,7 @@ export const HALL_CONFIGS: Record<string, HallConfig> = {
   },
   turkan: {
     name: "Türkan Saylan ÇYM Seminer Salonu",
+    stage: { label: 'SAHNE', position: 'top', size: 'small' },
     rows: [
       { row: 'A', seats: generateSeq(17) }, { row: 'B', seats: generateSeq(16) },
       { row: 'C', seats: generateSeq(17) }, { row: 'D', seats: generateSeq(17) },
@@ -449,6 +449,7 @@ export const HALL_CONFIGS: Record<string, HallConfig> = {
   },
   msku: {
     name: "Muğla Sıtkı Koçman Üni. Atatürk Kültür Merkezi",
+    stage: { label: 'ANA SAHNE', position: 'top', size: 'large' },
     rows: [
       { row: 'A', seats: [
           { number: "MS", type: "static" }, { number: "BSN", type: "static" }, 
@@ -473,6 +474,7 @@ export const HALL_CONFIGS: Record<string, HallConfig> = {
   },
   bodrum: {
     name: "Bodrum Marmara Koleji Atatürk Kültür Merkezi",
+    stage: { label: 'SAHNE', position: 'top', size: 'medium' },
     rows: [
       createBodrumRow('A', 7, 24, 6),
       createBodrumRow('B', 10, 24, 10),

@@ -1,5 +1,5 @@
 {
-  "name": "Muğla Protokol Oturma Düzeni Pro",
-  "description": "Muğla ili için gelişmiş etkinlik planlama ve protokol oturma düzeni yönetim sistemi. Supabase entegrasyonu ve Telegram duyuru desteği içerir.",
+  "name": "RESMİ PROTOKOL DAVETİ",
+  "description": "Ulusal ve yerel düzeyde gelişmiş etkinlik planlama ve protokol oturma düzeni yönetim sistemi. Supabase dinamik senkronizasyon, 81 il desteği, Muğla özel salon konfigürasyonları, otomatik veri temizleme ve gelişmiş AI veri aktarımı özelliklerini içerir.",
   "requestFramePermissions": []
 }

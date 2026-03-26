@@ -216,6 +216,26 @@ async function startServer() {
           .update({ ad_soyad: 'Erizan YILMAZ' })
           .ilike('unvan', '%KADEM%');
 
+        // ÖNCELİKLİ TEMİZLİK: Hatalı telefon verilerini temizle
+        const targetPhone = '5442717284';
+        console.log(`Hatalı telefon verileri (${targetPhone}) temizleniyor...`);
+        
+        // telegram_id sütununu temizle
+        await supabase
+          .from('protokol_listesi')
+          .update({ telegram_id: null })
+          .eq('telegram_id', targetPhone);
+
+        // telefon sütununu temizle (eğer varsa)
+        try {
+          await supabase
+            .from('protokol_listesi')
+            .update({ telefon: null as any })
+            .eq('telefon', targetPhone);
+        } catch (e) {
+          // Sütun yoksa hata verebilir, yoksay
+        }
+
         // Sadece sunucu ilk açıldığında bir kez denesin, her saat başı değil
         // await axios.get(`http://localhost:${PORT}/api/sync-protocol`);
       } catch (err) {
