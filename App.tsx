@@ -1908,6 +1908,7 @@ const App: React.FC = () => {
                         showGrid={showGrid}
                         showDimensions={showDimensions}
                         is3DMode={is3DMode}
+                        onToggle3DMode={setIs3DMode}
                         onFileChange={setInvitationFile}
                         referenceImages={referenceImages}
                         onUpdateReferenceImage={handleUpdateReferenceImage}

@@ -126,6 +126,48 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+            {/* 3D Object Library Section */}
+            <section className="space-y-4">
+              <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <Box className="w-3.5 h-3.5" /> 3D Nesne Kütüphanesi
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'protocol-table', icon: Users, label: 'Protokol Masası', type: 'table-rect', width: 200, height: 80, color: '#1e293b', labelText: 'Table1_Seat1_ProtokolA' },
+                  { id: 'bistro', icon: Circle, label: 'Bistro Masa', type: 'bistro-table', width: 60, height: 60, color: '#334155' },
+                  { id: 'truss', icon: Square, label: 'Sahne Truss', type: 'truss-stage', width: 400, height: 200, color: '#94a3b8' },
+                  { id: 'truck-stage', icon: Box, label: 'Tır Sahne', type: 'truck-stage', width: 600, height: 250, color: '#475569' },
+                  { id: 'generator', icon: Zap, label: 'Jeneratör', type: 'generator-truck', width: 150, height: 80, color: '#d97706' },
+                  { id: 'catering', icon: Database, label: 'İkram Aracı', type: 'catering-truck', width: 200, height: 100, color: '#059669' },
+                ].map((obj) => (
+                  <button
+                    key={obj.id}
+                    onClick={() => {
+                      const centerX = (hall.width || 1200) / 2;
+                      const centerY = (hall.height || 800) / 2;
+                      onAddElement?.([{
+                        id: `${obj.type}_${Date.now()}`,
+                        type: obj.type as any,
+                        x: centerX - obj.width / 2,
+                        y: centerY - obj.height / 2,
+                        width: obj.width,
+                        height: obj.height,
+                        rotation: 0,
+                        color: obj.color,
+                        label: obj.labelText || obj.label,
+                        z: 0,
+                        h: 0
+                      }]);
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-3 bg-slate-50 border-2 border-transparent hover:border-blue-500 hover:bg-white rounded-2xl transition-all group"
+                  >
+                    <obj.icon className="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                    <span className="text-[9px] font-black text-slate-400 group-hover:text-slate-600 uppercase tracking-tighter text-center">{obj.label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
             {hasSelection ? (
               <>
                 {/* Alignment Tools */}

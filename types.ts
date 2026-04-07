@@ -33,7 +33,7 @@ export interface HallRow {
 
 export interface HallElement {
   id: string;
-  type: 'chair' | 'table-round' | 'table-rect' | 'table-square' | 'stage' | 'led-screen' | 'ui-button' | 'wall' | 'door' | 'window' | 'decor' | 'plant' | 'bar' | 'text' | 'dimension-line' | 'work-area' | 'polygon' | 'sun-angle' | 'tree' | 'car' | 'building' | 'road' | 'person' | 'ambulance' | 'catering-truck' | 'security-post';
+  type: 'chair' | 'table-round' | 'table-rect' | 'table-square' | 'stage' | 'led-screen' | 'ui-button' | 'wall' | 'door' | 'window' | 'decor' | 'plant' | 'bar' | 'text' | 'dimension-line' | 'work-area' | 'polygon' | 'sun-angle' | 'tree' | 'car' | 'building' | 'road' | 'person' | 'ambulance' | 'catering-truck' | 'security-post' | 'truss-stage' | 'truck-stage' | 'generator-truck' | 'bistro-table';
   x: number;
   y: number;
   points?: { x: number; y: number }[]; // For polygons and roads
@@ -59,6 +59,33 @@ export interface HallElement {
   ticketZone?: string; // 'VIP' | 'Standard' | etc.
   legStyle?: 'default' | 'modern' | 'classic';
   zoningType?: 'residential' | 'commercial' | 'green' | 'education' | 'health' | 'industrial' | 'public';
+}
+
+export interface ProtocolSeatingRule {
+  id: string;
+  name: string;
+  priority: number; // 1: Highest (State Protocol), 10: Lowest
+  targetElementIds: string[]; // IDs of chairs or tables this rule applies to
+  allowedTitles: string[]; // Titles allowed in this zone
+  forbiddenTitles: string[]; // Titles explicitly forbidden
+  minDistanceBetween?: number; // Minimum distance between specific titles (in meters)
+  isVipZone: boolean;
+}
+
+export interface DigitalTwinSceneSchema {
+  venueId: string;
+  scaleFactor: number; // pixels per meter
+  bounds: { width: number; height: number };
+  detectedObjects: {
+    type: 'building' | 'empty_space' | 'obstacle';
+    points: { x: number; y: number }[];
+    estimatedHeight?: number;
+  }[];
+  calibrationLine: {
+    p1: { x: number; y: number };
+    p2: { x: number; y: number };
+    realDistance: number;
+  };
 }
 
 export interface ScaleCalibration {

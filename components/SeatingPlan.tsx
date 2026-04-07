@@ -2,7 +2,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Minus, XCircle, RotateCw, RotateCcw, Trash2, ZoomIn, ZoomOut, Maximize2, Monitor, Copy, ArrowUp, ArrowDown, AlignLeft, AlignRight, AlignStartVertical, AlignEndVertical, AlignCenter, AlignJustify, Group, Ungroup, Ruler, Sparkles, Sun, Navigation, Box, Move } from 'lucide-react';
 import { HallConfig, SeatData, HallElement, HallRow, ReferenceImage } from '../types';
-import { motion } from 'motion/react';
+import DrawingCanvas from './DrawingCanvas';
+import { motion, AnimatePresence } from 'motion/react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { 
   OrbitControls, PerspectiveCamera, Environment, ContactShadows, 
@@ -50,6 +51,7 @@ interface SeatingPlanProps {
   showDimensions?: boolean;
   snapToGrid?: boolean;
   is3DMode?: boolean;
+  onToggle3DMode?: (val: boolean) => void;
   onFileChange?: (file: File | null) => void;
   referenceImages?: ReferenceImage[];
   onUpdateReferenceImage?: (id: string, updates: Partial<ReferenceImage>) => void;
@@ -332,7 +334,9 @@ const Element3D = ({ el, selectedElementIds }: { el: HallElement, selectedElemen
   );
 };
 
-const Scene3D = ({ hall, referenceImages, selectedElementIds }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string> }) => {
+// --- Expert 3D Components ---
+
+const FloorPlan3D = ({ hall }: { hall: HallConfig }) => {
   const bgTexture = useMemo(() => {
     if (!hall.backgroundImage) return null;
     const loader = new THREE.TextureLoader();
@@ -340,8 +344,85 @@ const Scene3D = ({ hall, referenceImages, selectedElementIds }: { hall: HallConf
     return loader.load(hall.backgroundImage);
   }, [hall.backgroundImage]);
 
-  // Calculate ground size based on hall or image aspect ratio
   const groundSize = 1000;
+
+  return (
+    <group>
+      {/* Reality Capture Base Slab */}
+      <group position={[0, -5.2, 0]}>
+        <mesh receiveShadow>
+          <boxGeometry args={[groundSize + 200, 10, groundSize + 200]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.1} metalness={0.8} />
+        </mesh>
+        <Grid 
+          position={[0, 5.1, 0]}
+          infiniteGrid 
+          fadeDistance={1500} 
+          fadeStrength={15} 
+          cellSize={20} 
+          sectionSize={100} 
+          sectionThickness={1} 
+          sectionColor="#1e293b" 
+          cellColor="#334155" 
+        />
+      </group>
+
+      {/* The Digital Twin Ground Plane */}
+      {bgTexture && (
+        <mesh position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[groundSize, groundSize]} />
+          <meshStandardMaterial 
+            map={bgTexture} 
+            roughness={1} 
+            metalness={0} 
+            transparent 
+            opacity={1}
+          />
+        </mesh>
+      )}
+    </group>
+  );
+};
+
+const BuildingProxy3D = ({ el, selectedElementIds }: { el: HallElement, selectedElementIds: Set<string> }) => {
+  if (el.type !== 'polygon' && el.type !== 'building') return null;
+  return <Polygon3D el={el} selectedElementIds={selectedElementIds} />;
+};
+
+const EventObject3D = ({ el, selectedElementIds }: { el: HallElement, selectedElementIds: Set<string> }) => {
+  // Filter out buildings/polygons as they are handled by BuildingProxy3D
+  if (el.type === 'polygon' || el.type === 'building' || el.type === 'road') return null;
+  return <Element3D el={el} selectedElementIds={selectedElementIds} />;
+};
+
+const DigitalTwinWorkstation = ({ hall, referenceImages, selectedElementIds }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string> }) => {
+  // Computer Vision Simulation: Extracting numerical data from calibration
+  const sceneSchema = useMemo(() => {
+    const scaleFactor = hall.scaleCalibration?.pixelDistance || 1;
+    const realDist = hall.scaleCalibration?.realDistance || 1;
+    const pixelsPerMeter = scaleFactor / realDist;
+
+    const schema = {
+      venueId: hall.name || 'unknown',
+      scaleFactor: pixelsPerMeter,
+      bounds: { width: hall.width || 1000, height: hall.height || 1000 },
+      detectedObjects: (hall.elements || [])
+        .filter(el => el.type === 'polygon' || el.type === 'building')
+        .map(el => ({
+          type: el.type === 'polygon' ? 'empty_space' : 'building',
+          points: el.points || [],
+          estimatedHeight: el.h
+        })),
+      calibrationLine: hall.elements?.find(el => el.type === 'dimension-line') ? {
+        p1: { x: 0, y: 0 }, // Simplified for simulation
+        p2: { x: 100, y: 0 },
+        realDistance: realDist
+      } : null
+    };
+
+    console.log("Generated Digital Twin Scene Schema:", JSON.stringify(schema, null, 2));
+    return schema;
+  }, [hall]);
 
   return (
     <>
@@ -367,59 +448,32 @@ const Scene3D = ({ hall, referenceImages, selectedElementIds }: { hall: HallConf
         shadow-mapSize={[4096, 4096]}
       />
       
-      {/* Reality Capture Base Slab */}
-      <group position={[0, -5.2, 0]}>
-        <mesh receiveShadow>
-          <boxGeometry args={[groundSize + 200, 10, groundSize + 200]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.1} metalness={0.8} />
-        </mesh>
-        {/* Technical Grid on Base */}
-        <Grid 
-          position={[0, 5.1, 0]}
-          infiniteGrid 
-          fadeDistance={1500} 
-          fadeStrength={15} 
-          cellSize={20} 
-          sectionSize={100} 
-          sectionThickness={1} 
-          sectionColor="#1e293b" 
-          cellColor="#334155" 
-        />
-      </group>
+      <FloorPlan3D hall={hall} />
 
       <group>
-        {/* AUTOMATIC DIGITAL TWIN GROUND - The uploaded image becomes the 3D world */}
-        {bgTexture && (
-          <mesh position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-            <planeGeometry args={[groundSize, groundSize]} />
-            <meshStandardMaterial 
-              map={bgTexture} 
-              roughness={1} 
-              metalness={0} 
-              transparent 
-              opacity={1}
-            />
-          </mesh>
-        )}
-
-        {/* Reference Images as additional 3D layers */}
         {referenceImages.map(img => (
           <ReferenceImage3D key={img.id} img={img} />
         ))}
 
-        {/* Event Elements (Stage, Chairs, etc.) */}
         {hall.elements?.map(el => (
-          <Element3D key={el.id} el={el} selectedElementIds={selectedElementIds} />
+          <React.Fragment key={el.id}>
+            <BuildingProxy3D el={el} selectedElementIds={selectedElementIds} />
+            <EventObject3D el={el} selectedElementIds={selectedElementIds} />
+          </React.Fragment>
         ))}
       </group>
 
-      <ContactShadows position={[0, 0.1, 0]} opacity={0.7} scale={groundSize} blur={2} far={20} />
+      <ContactShadows position={[0, 0.1, 0]} opacity={0.7} scale={1000} blur={2} far={20} />
       
       <GizmoHelper alignment="bottom-right" margin={[100, 100]}>
         <GizmoViewport axisColors={['#f87171', '#4ade80', '#60a5fa']} labelColor="white" />
       </GizmoHelper>
     </>
   );
+};
+
+const Scene3D = ({ hall, referenceImages, selectedElementIds }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string> }) => {
+  return <DigitalTwinWorkstation hall={hall} referenceImages={referenceImages} selectedElementIds={selectedElementIds} />;
 };
 
 const SeatingPlan: React.FC<SeatingPlanProps> = ({ 
@@ -433,6 +487,7 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
   showDimensions = true,
   snapToGrid: shouldSnapToGrid = true,
   is3DMode = false,
+  onToggle3DMode,
   onFileChange,
   referenceImages = [],
   onUpdateReferenceImage
@@ -1627,113 +1682,20 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
     >
       {is3DMode ? (
         <div className="absolute inset-0 z-[100] bg-slate-900 rounded-[40px] overflow-hidden">
-          {/* Reality Capture Workstation Overlays */}
-      <div className="absolute top-8 left-8 flex flex-col gap-4 pointer-events-none z-50">
-        <div className="bg-slate-900/90 backdrop-blur-2xl p-6 rounded-[32px] border border-white/10 shadow-2xl min-w-[280px]">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Box className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h4 className="text-[14px] font-black text-white uppercase tracking-widest leading-none mb-1">3D ÇALIŞMA ALANI</h4>
-              <p className="text-[9px] font-bold text-blue-400 uppercase tracking-[0.2em]">REALITYCAPTURE MODU</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {[
-              { label: 'SAĞ TIK İLE DÖNDÜR', icon: RotateCw },
-              { label: 'SOL TIK İLE KAYDIR', icon: Move },
-              { label: 'TEKERLEK İLE YAKINLAŞ', icon: Maximize2 },
-            ].map((tip, i) => (
-              <div key={i} className="flex items-center gap-3 text-slate-400">
-                <tip.icon className="w-4 h-4" />
-                <span className="text-[10px] font-black uppercase tracking-widest">{tip.label}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-white/5">
-            <button className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-3 pointer-events-auto active:scale-95">
-              <Monitor className="w-4 h-4" />
-              EKRAN GÖRÜNTÜSÜ AL
-            </button>
-          </div>
-
-          <div className="mt-4 p-4 bg-white/5 rounded-2xl border border-white/5">
-            <p className="text-[9px] text-slate-500 font-bold text-center uppercase tracking-widest leading-relaxed">
-              FOTOGRAMETRİ VERİLERİ AKTİF<br/>SİMÜLASYON MODU ÇALIŞIYOR
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute bottom-8 right-8 flex flex-col items-end gap-2 pointer-events-none opacity-40 z-50">
-        <span className="text-[10px] font-black text-white uppercase tracking-[0.4em]">REAL-TIME RENDER ENGINE</span>
-        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">V.2.5.0 - PRO WORKSTATION</span>
-      </div>
-
-      <Canvas shadows gl={{ preserveDrawingBuffer: true }}>
-            <Scene3D hall={hall} referenceImages={referenceImages} selectedElementIds={selectedElementIds} />
-          </Canvas>
+          <DrawingCanvas 
+            hall={hall} 
+            referenceImages={referenceImages} 
+            selectedElementIds={selectedElementIds} 
+            onUpdateElements={handleUpdateElements}
+            onSelectElements={setSelectedElementIds}
+          />
           
-          {/* 3D Overlay Controls */}
-          <div className="absolute top-8 left-8 z-[200] flex flex-col gap-6 pointer-events-none">
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="bg-slate-900/90 backdrop-blur-2xl border-2 border-blue-500/30 p-8 rounded-[40px] shadow-2xl shadow-blue-500/20"
-            >
-              <div className="flex items-center gap-5 mb-6">
-                <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/40">
-                  <Box className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-white uppercase tracking-tight leading-none">3D ÇALIŞMA ALANI</h3>
-                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mt-2 block">REALİTYCAPTURE MODU</span>
-                </div>
-              </div>
-              
-              <div className="space-y-4 border-t border-white/10 pt-6">
-                {[
-                  { label: 'SAĞ TIK İLE DÖNDÜR', icon: RotateCw },
-                  { label: 'SOL TIK İLE KAYDIR', icon: Move },
-                  { label: 'TEKERLEK İLE YAKINLAŞ', icon: ZoomIn },
-                ].map((tip, i) => (
-                  <div key={i} className="flex items-center gap-4 text-slate-400">
-                    <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center">
-                      <tip.icon className="w-4 h-4" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">{tip.label}</span>
-                  </div>
-                ))}
-                {/* Screenshot Button */}
-                <button 
-                  onClick={handleCapture3D}
-                  disabled={isCapturing}
-                  className="w-full mt-4 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-[24px] text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-xl shadow-blue-500/20 border-b-4 border-blue-800 pointer-events-auto disabled:opacity-50"
-                >
-                  {isCapturing ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      GÖRÜNTÜ ALINIYOR...
-                    </>
-                  ) : (
-                    <>
-                      <Monitor className="w-5 h-5" /> EKRAN GÖRÜNTÜSÜ AL
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="mt-8 p-4 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-                <p className="text-[9px] font-bold text-blue-300 leading-relaxed uppercase tracking-widest text-center">
-                  FOTOGRAMETRİ VERİLERİ AKTİF<br/>
-                  SİMÜLASYON MODU ÇALIŞIYOR
-                </p>
-              </div>
-            </motion.div>
-          </div>
+          <button 
+            onClick={() => onToggle3DMode?.(false)}
+            className="absolute top-8 right-8 w-14 h-14 bg-white/10 hover:bg-white/20 backdrop-blur-xl text-white rounded-2xl flex items-center justify-center transition-all shadow-2xl border border-white/10 z-[101] group pointer-events-auto"
+          >
+            <XCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />
+          </button>
         </div>
       ) : (
         <>
