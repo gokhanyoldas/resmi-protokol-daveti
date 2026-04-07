@@ -92,15 +92,17 @@ const HallAnalysisPanel: React.FC<HallAnalysisPanelProps> = ({ isOpen, onClose, 
 
       const response = await ai.models.generateContent({
         model,
-        contents: [
-          { text: prompt },
-          {
-            inlineData: {
-              mimeType: selectedFile.type,
-              data: base64Data
+        contents: {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: selectedFile.type,
+                data: base64Data
+              }
             }
-          }
-        ],
+          ]
+        },
         config: {
           responseMimeType: "application/json",
         }

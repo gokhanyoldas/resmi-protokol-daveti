@@ -1,5 +1,5 @@
 {
-  "name": "RESMİ PROTOKOL DAVETİ",
-  "description": "Ulusal ve yerel düzeyde gelişmiş etkinlik planlama ve protokol oturma düzeni yönetim sistemi. Supabase dinamik senkronizasyon, 81 il desteği, Muğla özel salon konfigürasyonları, otomatik veri temizleme ve gelişmiş AI veri aktarımı özelliklerini içerir.",
+  "name": "Sahne Planlama ve Alan Ölçüm Aracı",
+  "description": "Resim üzerinden alan seçimi, m2 hesaplama ve sahne ekipmanları yerleşimi yapabilen profesyonel planlama aracı.",
   "requestFramePermissions": []
 }

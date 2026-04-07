@@ -1,17 +1,19 @@
 
 import { GoogleGenAI } from "@google/genai";
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Users, Printer, ZoomIn, ZoomOut, Database, RefreshCw, MessageSquare, AlertCircle, Loader2, CheckCircle2, XCircle, Clock, Send, ChevronDown, MapPin, Tag, Layout, Sparkles, Edit2, AlertTriangle, Search, Upload, Plus, Trash2, Undo2, RotateCw, Copy, ArrowUp, ArrowDown, Group, Ungroup, AlignLeft, AlignRight, AlignStartVertical, AlignEndVertical, AlignCenter, AlignJustify, Minus } from 'lucide-react';
+import { Users, Printer, ZoomIn, ZoomOut, Database, RefreshCw, MessageSquare, AlertCircle, Loader2, CheckCircle2, XCircle, Clock, Send, ChevronDown, MapPin, Tag, Layout, Sparkles, Edit2, AlertTriangle, Search, Upload, Plus, Trash2, Undo2, RotateCw, Copy, ArrowUp, ArrowDown, Group, Ungroup, AlignLeft, AlignRight, AlignStartVertical, AlignEndVertical, AlignCenter, AlignJustify, Minus, LayoutGrid, Ruler, Maximize2, Redo2, Settings2, Type, RotateCcw, Zap } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { PROTOCOL_DATA, HALL_CONFIGS, TURKEY_CITIES, CITY_HALLS } from './constants';
 import { motion } from 'motion/react';
-import { ProtocolPerson, HallKey, SeatData, HallConfig, HallElement } from './types';
+import { ProtocolPerson, HallKey, SeatData, HallConfig, HallElement, ReferenceImage } from './types';
 import Sidebar from './components/Sidebar';
+import RightSidebar from './components/RightSidebar';
 import SeatingPlan from './components/SeatingPlan';
 import GuestModal from './components/GuestModal';
 import DataImportPanel from './components/DataImportPanel';
 import TelegramPreview from './components/TelegramPreview';
 import HallAnalysisPanel from './components/HallAnalysisPanel';
+import { AnimatePresence } from 'motion/react';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://qorygwdwirbtqewhubze.supabase.co';
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvcnlnd2R3aXJidHFld2h1YnplIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDYyOTU1OCwiZXhwIjoyMDgwMjA1NTU4fQ.oeReAMn8O533IcPcDSg1QfzYTden72SyK677etV9ZaM';
@@ -34,7 +36,7 @@ const App: React.FC = () => {
   const [activeSeatId, setActiveSeatId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportPanelOpen, setIsImportPanelOpen] = useState(false);
-  const [activeLayoutTab, setActiveLayoutTab] = useState<'ai' | 'draw' | 'template' | 'library'>('ai');
+  const [activeLayoutTab, setActiveLayoutTab] = useState<'ai' | 'draw' | 'template' | 'library' | 'layers'>('ai');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [designProgress, setDesignProgress] = useState(0);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
@@ -50,19 +52,100 @@ const App: React.FC = () => {
   const [blockChairs, setBlockChairs] = useState(10);
   const [tableChairCount, setTableChairCount] = useState(8);
   const [is3DMode, setIs3DMode] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [showGrid, setShowGrid] = useState(true);
+  const [showDimensions, setShowDimensions] = useState(true);
+  const [isPanning, setIsPanning] = useState(false);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [isDrawingDimension, setIsDrawingDimension] = useState(false);
+  const [isTapeMeasuring, setIsTapeMeasuring] = useState(false);
+  const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
+  const [isDrawingSunAngle, setIsDrawingSunAngle] = useState(false);
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const [calibrationPoints, setCalibrationPoints] = useState<{x: number, y: number}[]>([]);
+  const [calibrationModalOpen, setCalibrationModalOpen] = useState(false);
+  const [lastPixelDist, setLastPixelDist] = useState(0);
+  const [realDistInput, setRealDistInput] = useState('10');
+
+  const handleAddReferenceImage = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const url = e.target?.result as string;
+      const type = file.type.startsWith('video/') ? 'video' : 'image';
+      
+      if (type === 'image') {
+        const img = new Image();
+        img.onload = () => {
+          const newImg: ReferenceImage = {
+            id: Math.random().toString(36).substr(2, 9),
+            url,
+            type: 'image',
+            x: 0,
+            y: 0,
+            scale: 1,
+            rotation: 0,
+            opacity: 0.5,
+            visible: true,
+            isLocked: false,
+            name: file.name,
+            aspectRatio: img.width / img.height
+          };
+          setReferenceImages(prev => [...prev, newImg]);
+        };
+        img.src = url;
+      } else {
+        const video = document.createElement('video');
+        video.onloadedmetadata = () => {
+          const newImg: ReferenceImage = {
+            id: Math.random().toString(36).substr(2, 9),
+            url,
+            type: 'video',
+            x: 0,
+            y: 0,
+            scale: 1,
+            rotation: 0,
+            opacity: 0.5,
+            visible: true,
+            isLocked: false,
+            name: file.name,
+            aspectRatio: video.videoWidth / video.videoHeight
+          };
+          setReferenceImages(prev => [...prev, newImg]);
+        };
+        video.src = url;
+      }
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleRemoveReferenceImage = useCallback((id: string) => {
+    setReferenceImages(prev => prev.filter(img => img.id !== id));
+  }, []);
+
+  const handleUpdateReferenceImage = useCallback((id: string, updates: Partial<ReferenceImage>) => {
+    setReferenceImages(prev => prev.map(img => img.id === id ? { ...img, ...updates } : img));
+  }, []);
 
   const getTemplateElements = useCallback((tmplId: string, centerX = 0, centerY = 0): HallElement[] => {
     let newElements: HallElement[] = [];
     const groupId = `group_${Math.random().toString(36).substr(2, 9)}`;
 
     if (tmplId === 'theatre_free') {
+      const chairSpacingX = 50;
+      const chairSpacingY = 60;
+      const totalWidth = (blockChairs - 1) * chairSpacingX;
+      const totalHeight = (blockRows - 1) * chairSpacingY;
+      
       for (let r = 0; r < blockRows; r++) {
         for (let c = 0; c < blockChairs; c++) {
           newElements.push({
             id: `th-${r}-${c}-${groupId}`,
             type: 'chair',
-            x: centerX - (blockChairs * 25) + (c * 50),
-            y: centerY - (blockRows * 30) + (r * 60),
+            x: centerX - totalWidth / 2 + (c * chairSpacingX) - 20, // -20 to center the 40px chair
+            y: centerY - totalHeight / 2 + (r * chairSpacingY) - 20,
             rotation: 0,
             seatNumber: `${String.fromCharCode(65 + r)}${c + 1}`,
             groupId,
@@ -73,10 +156,15 @@ const App: React.FC = () => {
       }
     } else if (tmplId === 'classroom_free') {
       const tablesPerRow = Math.ceil(blockChairs / 2);
+      const tableSpacingX = 200;
+      const tableSpacingY = 120;
+      const totalWidth = (tablesPerRow - 1) * tableSpacingX + 120;
+      const totalHeight = (blockRows - 1) * tableSpacingY + 100;
+
       for (let r = 0; r < blockRows; r++) {
         for (let c = 0; c < tablesPerRow; c++) {
-          const tx = centerX - (tablesPerRow * 100) + (c * 200);
-          const ty = centerY - (blockRows * 50) + (r * 100);
+          const tx = centerX - totalWidth / 2 + (c * tableSpacingX);
+          const ty = centerY - totalHeight / 2 + (r * tableSpacingY);
           newElements.push({ 
             id: `t-classroom-${r}-${c}-${groupId}`, 
             type: 'table-rect', 
@@ -105,53 +193,33 @@ const App: React.FC = () => {
       // Top Table
       newElements.push({ id: `t-u-top-${groupId}`, type: 'table-rect', x: centerX - tableWidth/2, y: centerY - sideTableLength/2 - tableHeight, rotation: 0, width: tableWidth, height: tableHeight, groupId, label: 'Protokol', z: 0.75, h: 0.05 });
       for (let i = 0; i < topChairs; i++) {
-        newElements.push({ id: `c-u-top-${i}-${groupId}`, type: 'chair', x: centerX - (topChairs * 25) + (i * 50) + 25, y: centerY - sideTableLength/2 - tableHeight - 40, rotation: 0, seatNumber: `P${i + 1}`, groupId, z: 0, h: 0 });
+        newElements.push({ id: `c-u-top-${i}-${groupId}`, type: 'chair', x: centerX - (topChairs * 25) + (i * 50) + 25 - 20, y: centerY - sideTableLength/2 - tableHeight - 40, rotation: 0, seatNumber: `P${i + 1}`, groupId, z: 0, h: 0 });
       }
 
       // Left Table & Chairs
       newElements.push({ id: `t-u-left-${groupId}`, type: 'table-rect', x: centerX - tableWidth/2, y: centerY - sideTableLength/2, rotation: 90, width: sideTableLength, height: tableHeight, groupId, z: 0.75, h: 0.05 });
       for (let i = 0; i < sideChairs; i++) {
-        newElements.push({ id: `c-u-left-${i}-${groupId}`, type: 'chair', x: centerX - tableWidth/2 - 40, y: centerY - sideTableLength/2 + (i * 50) + 25, rotation: 270, seatNumber: `L${i + 1}`, groupId, z: 0, h: 0 });
+        newElements.push({ id: `c-u-left-${i}-${groupId}`, type: 'chair', x: centerX - tableWidth/2 - 40, y: centerY - sideTableLength/2 + (i * 50) + 25 - 20, rotation: 270, seatNumber: `L${i + 1}`, groupId, z: 0, h: 0 });
       }
 
       // Right Table & Chairs
       newElements.push({ id: `t-u-right-${groupId}`, type: 'table-rect', x: centerX + tableWidth/2 - tableHeight, y: centerY - sideTableLength/2, rotation: 90, width: sideTableLength, height: tableHeight, groupId, z: 0.75, h: 0.05 });
       for (let i = 0; i < sideChairs; i++) {
-        newElements.push({ id: `c-u-right-${i}-${groupId}`, type: 'chair', x: centerX + tableWidth/2 + 10, y: centerY - sideTableLength/2 + (i * 50) + 25, rotation: 90, seatNumber: `R${i + 1}`, groupId, z: 0, h: 0 });
-      }
-    } else if (tmplId === 'protocol_u_shape') {
-      // Specialized Protocol U-Shape with double chairs and larger head table
-      const headChairs = Math.max(6, blockChairs);
-      const sideChairs = Math.max(8, blockRows * 2);
-      const tableWidth = headChairs * 60 + 100;
-      const tableHeight = 80;
-      const sideLength = sideChairs * 50;
-
-      // Head Table
-      newElements.push({ id: `prot-u-head-${groupId}`, type: 'table-rect', x: centerX - tableWidth/2, y: centerY - sideLength/2 - tableHeight, rotation: 0, width: tableWidth, height: tableHeight, groupId, label: 'PROTOKOL HEYETİ', z: 0.8, h: 0.05 });
-      for (let i = 0; i < headChairs; i++) {
-        newElements.push({ id: `prot-u-c-head-${i}-${groupId}`, type: 'chair', x: centerX - (headChairs * 30) + (i * 60) + 30, y: centerY - sideLength/2 - tableHeight - 45, rotation: 0, seatNumber: `P${i + 1}`, groupId, z: 0, h: 0 });
-      }
-
-      // Left Wing
-      newElements.push({ id: `prot-u-left-t-${groupId}`, type: 'table-rect', x: centerX - tableWidth/2, y: centerY - sideLength/2, rotation: 90, width: sideLength, height: tableHeight, groupId, z: 0.75, h: 0.05 });
-      for (let i = 0; i < sideChairs; i++) {
-        newElements.push({ id: `prot-u-left-c-${i}-${groupId}`, type: 'chair', x: centerX - tableWidth/2 - 45, y: centerY - sideLength/2 + (i * 50) + 25, rotation: 270, seatNumber: `L${i + 1}`, groupId, z: 0, h: 0 });
-      }
-
-      // Right Wing
-      newElements.push({ id: `prot-u-right-t-${groupId}`, type: 'table-rect', x: centerX + tableWidth/2 - tableHeight, y: centerY - sideLength/2, rotation: 90, width: sideLength, height: tableHeight, groupId, z: 0.75, h: 0.05 });
-      for (let i = 0; i < sideChairs; i++) {
-        newElements.push({ id: `prot-u-right-c-${i}-${groupId}`, type: 'chair', x: centerX + tableWidth/2 + 15, y: centerY - sideLength/2 + (i * 50) + 25, rotation: 90, seatNumber: `R${i + 1}`, groupId, z: 0, h: 0 });
+        newElements.push({ id: `c-u-right-${i}-${groupId}`, type: 'chair', x: centerX + tableWidth/2 + 10, y: centerY - sideTableLength/2 + (i * 50) + 25 - 20, rotation: 90, seatNumber: `R${i + 1}`, groupId, z: 0, h: 0 });
       }
     } else if (tmplId === 'banquet_free' || tmplId === 'round_free') {
-      const rows = Math.ceil(Math.sqrt(blockRows)); // Use blockRows as table count for these templates
+      const rows = Math.ceil(Math.sqrt(blockRows)); 
       const cols = Math.ceil(blockRows / rows);
+      const spacingX = 250;
+      const spacingY = 250;
+      const totalWidth = (cols - 1) * spacingX + 120;
+      const totalHeight = (rows - 1) * spacingY + 120;
+
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           if (r * cols + c >= blockRows) break;
-          const tx = centerX - (cols * 100) + (c * 250);
-          const ty = centerY - (rows * 100) + (r * 250);
+          const tx = centerX - totalWidth / 2 + (c * spacingX);
+          const ty = centerY - totalHeight / 2 + (r * spacingY);
           newElements.push({
             id: `tr-${r}-${c}-${groupId}`,
             type: 'table-round',
@@ -168,11 +236,27 @@ const App: React.FC = () => {
           });
         }
       }
+    } else if (tmplId === 'square_free') {
+      const size = 120;
+      newElements.push({ 
+        id: `sq-table-${groupId}`, 
+        type: 'table-square', 
+        x: centerX - size/2, 
+        y: centerY - size/2, 
+        rotation: 0, 
+        width: size, 
+        height: size, 
+        chairCount: tableChairCount,
+        groupId, 
+        label: 'Kare Masa',
+        z: 0.75, 
+        h: 0.05 
+      });
     } else if (tmplId === 'protocol_free') {
       const mainTableWidth = Math.max(400, blockChairs * 60);
       newElements.push({ id: `p-main-${groupId}`, type: 'table-rect', x: centerX - mainTableWidth/2, y: centerY - 50, rotation: 0, width: mainTableWidth, height: 100, groupId, label: 'PROTOKOL', z: 0.75, h: 0.05 });
       for (let i = 0; i < blockChairs; i++) {
-        newElements.push({ id: `p-c-${i}-${groupId}`, type: 'chair', x: centerX - mainTableWidth/2 + 30 + (i * (mainTableWidth - 60) / (blockChairs - 1 || 1)), y: centerY + 60, rotation: 0, seatNumber: `P${i + 1}`, groupId, z: 0, h: 0 });
+        newElements.push({ id: `p-c-${i}-${groupId}`, type: 'chair', x: centerX - mainTableWidth/2 + 30 + (i * (mainTableWidth - 60) / (blockChairs - 1 || 1)) - 20, y: centerY + 60, rotation: 0, seatNumber: `P${i + 1}`, groupId, z: 0, h: 0 });
       }
     } else if (tmplId === 'square_free') {
       const size = Math.max(200, blockChairs * 40);
@@ -223,10 +307,26 @@ const App: React.FC = () => {
     return newElements;
   }, [blockRows, blockChairs, tableChairCount]);
 
-  const allHallConfigs = useMemo(() => ({
-    ...HALL_CONFIGS,
-    ...dynamicHalls
-  }), [dynamicHalls]);
+  const allHallConfigs = useMemo(() => {
+    const combined: Record<string, HallConfig> = {};
+    Object.keys(HALL_CONFIGS).forEach(key => {
+      combined[key] = { 
+        ...HALL_CONFIGS[key], 
+        elements: (HALL_CONFIGS[key] as any).elements || [],
+        referenceImages: (HALL_CONFIGS[key] as any).referenceImages || [],
+        viewMode: (HALL_CONFIGS[key] as any).viewMode || '2d'
+      };
+    });
+    Object.keys(dynamicHalls).forEach(key => {
+      combined[key] = { 
+        ...dynamicHalls[key], 
+        elements: dynamicHalls[key].elements || [],
+        referenceImages: dynamicHalls[key].referenceImages || referenceImages,
+        viewMode: dynamicHalls[key].viewMode || viewMode
+      };
+    });
+    return combined;
+  }, [dynamicHalls, referenceImages, viewMode]);
 
   const pushToHistory = useCallback((config: HallConfig) => {
     setHistory(prev => {
@@ -436,7 +536,10 @@ const App: React.FC = () => {
   }, []);
 
   const handleUpdateHall = useCallback((newConfig: HallConfig) => {
-    pushToHistory(allHallConfigs[selectedHall]);
+    const currentHall = allHallConfigs[selectedHall];
+    if (currentHall) {
+      pushToHistory(currentHall);
+    }
     setDynamicHalls(prev => ({
       ...prev,
       [selectedHall]: newConfig
@@ -1385,6 +1488,16 @@ const App: React.FC = () => {
 
   const [isGeneratingLayout, setIsGeneratingLayout] = useState(false);
 
+  const handleSelectAll = useCallback(() => {
+    const currentHall = allHallConfigs[selectedHall];
+    if (!currentHall || !currentHall.elements) return;
+    setSelectedElementIds(new Set(currentHall.elements.map(el => el.id)));
+  }, [allHallConfigs, selectedHall]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedElementIds(new Set());
+  }, []);
+
   const handleMagicLayout = useCallback(async (prompt: string) => {
     if (!prompt || isGeneratingLayout) return;
     setIsGeneratingLayout(true);
@@ -1417,9 +1530,12 @@ const App: React.FC = () => {
         ...allHallConfigs[selectedHall],
         elements: [...(allHallConfigs[selectedHall].elements || []), ...newElements]
       });
+      setStatusMessage({ text: "Yapay zeka yerleşimi başarıyla oluşturuldu.", type: 'success' });
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (error) {
       console.error('Magic Layout Error:', error);
-      alert('Yapay zeka yerleşimi oluştururken bir hata oluştu.');
+      setStatusMessage({ text: "Yapay zeka yerleşimi oluşturulurken bir hata oluştu.", type: 'error' });
+      setTimeout(() => setStatusMessage(null), 3000);
     } finally {
       setIsGeneratingLayout(false);
     }
@@ -1509,9 +1625,20 @@ const App: React.FC = () => {
     setActiveLayoutTab('draw');
   };
 
+  const handleLayoutTabChange = useCallback((tab: 'ai' | 'draw' | 'template' | 'library') => {
+    setActiveLayoutTab(tab);
+    if (tab === 'template' || tab === 'draw') {
+      setIsSidebarCollapsed(true);
+      setIsRightPanelOpen(true);
+    } else {
+      setIsSidebarCollapsed(false);
+      setIsRightPanelOpen(false);
+    }
+  }, []);
+
   return (
-    <div className="flex flex-col h-screen select-none bg-slate-50">
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-30">
+    <div className="flex flex-col h-screen bg-slate-50">
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-[100]">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <div className="bg-blue-600 p-2 rounded-xl shadow-lg"><Users className="text-white w-5 h-5" /></div>
@@ -1574,9 +1701,21 @@ const App: React.FC = () => {
           onOpenHallAnalysis={() => setIsHallAnalysisOpen(true)}
           onStartFreeDraw={handleStartFreeDraw}
           onUpdatePerson={handleUpdatePerson}
+          selectedElementIds={selectedElementIds}
+          setSelectedElementIds={setSelectedElementIds}
+          onUpdateElements={handleUpdateElements}
+          onRemoveElements={handleRemoveElements}
+          onDuplicateElements={handleDuplicateElements}
+          onReorderElements={handleReorderElements}
+          onAlignElements={handleAlignElements}
+          onDistributeElements={handleDistributeElements}
+          onGroupElements={handleGroupElements}
+          onUngroupElements={handleUngroupElements}
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClearSelection}
           botInfo={botInfo}
           activeLayoutTab={activeLayoutTab}
-          setActiveLayoutTab={setActiveLayoutTab}
+          setActiveLayoutTab={handleLayoutTabChange}
           hall={allHallConfigs[selectedHall] || { name: 'YENİ TASARIM', rows: [], stage: { label: 'SAHNE', position: 'top', size: 'medium' } }}
           onUpdateHall={updateHall}
           onAddElement={handleAddElement}
@@ -1593,8 +1732,6 @@ const App: React.FC = () => {
           canUndo={canUndo}
           canRedo={canRedo}
           completedSteps={completedSteps}
-          selectedElementIds={selectedElementIds}
-          setSelectedElementIds={setSelectedElementIds}
           getTemplateElements={getTemplateElements}
           blockRows={blockRows}
           setBlockRows={setBlockRows}
@@ -1604,301 +1741,280 @@ const App: React.FC = () => {
           setTableChairCount={setTableChairCount}
           is3DMode={is3DMode}
           setIs3DMode={setIs3DMode}
+          isCollapsed={isSidebarCollapsed}
+          setIsCollapsed={setIsSidebarCollapsed}
           onSmartAutoLayout={handleSmartAutoLayout}
           onMagicLayout={handleMagicLayout}
           isGeneratingLayout={isGeneratingLayout}
+          isRightPanelOpen={isRightPanelOpen}
+          setIsRightPanelOpen={setIsRightPanelOpen}
         />
-        <main className="flex-1 overflow-hidden relative flex flex-col items-center bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px]">
-          {/* Top Contextual Toolbar */}
-          {selectedElementIds.size > 0 && (activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library') && (
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-3">
-              <motion.div 
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-slate-900/95 backdrop-blur-xl text-white rounded-2xl shadow-2xl p-1.5 flex items-center gap-1 border border-slate-700/50"
-              >
+        <main className="flex-1 overflow-hidden relative flex bg-slate-100">
+          <div className="flex-1 overflow-hidden relative flex flex-col items-center bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px]">
+          {/* Floating Workspace Controls */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center group">
+            <motion.div 
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="bg-slate-900/40 hover:bg-slate-900/95 backdrop-blur-sm hover:backdrop-blur-xl border border-slate-700/30 hover:border-slate-700/50 rounded-2xl p-1 hover:p-2 shadow-lg hover:shadow-2xl flex items-center gap-1 hover:gap-2 transition-all duration-500 ease-in-out group-hover:scale-105"
+            >
+              <div className="flex items-center gap-0.5 hover:gap-1 bg-slate-800/30 group-hover:bg-slate-800/50 rounded-xl p-0.5 hover:p-1 transition-all">
                 <button 
-                  onClick={() => handleUpdateElements(Array.from(selectedElementIds), (el) => ({ rotation: (el.rotation || 0) + 45 }))}
-                  className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-90"
-                  title="Döndür"
+                  onClick={() => setZoom(prev => Math.max(0.2, prev - 0.1))}
+                  className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all"
+                  title="Uzaklaştır"
                 >
-                  <RotateCw className="w-5 h-5" />
+                  <ZoomOut className="w-3.5 h-3.5" />
                 </button>
-
-                <button 
-                  onClick={() => handleDuplicateElements(Array.from(selectedElementIds))}
-                  className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-90"
-                  title="Çoğalt"
-                >
-                  <Copy className="w-5 h-5" />
-                </button>
-
-                <div className="w-[1px] h-6 bg-slate-700/50 mx-1" />
-
-                <button 
-                  onClick={() => handleReorderElements(Array.from(selectedElementIds), 'front')}
-                  className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-90"
-                  title="Öne Getir"
-                >
-                  <ArrowUp className="w-5 h-5" />
-                </button>
-
-                <button 
-                  onClick={() => handleReorderElements(Array.from(selectedElementIds), 'back')}
-                  className="p-2.5 hover:bg-white/10 rounded-xl transition-all active:scale-90"
-                  title="Arkaya Gönder"
-                >
-                  <ArrowDown className="w-5 h-5" />
-                </button>
-
-                {/* Chair Count Control for Tables */}
-                {Array.from(selectedElementIds).some(id => allHallConfigs[selectedHall]?.elements?.find(el => el.id === id)?.type.includes('table')) && (
-                  <>
-                    <div className="w-[1px] h-6 bg-slate-700/50 mx-1" />
-                    <div className="flex items-center bg-slate-800/50 rounded-xl px-1 py-0.5 gap-1">
-                      <button 
-                        onClick={() => {
-                          handleUpdateElements(Array.from(selectedElementIds), (el) => {
-                            if (el.type.includes('table')) {
-                              return { chairCount: Math.max(2, (el.chairCount || 8) - 1) };
-                            }
-                            return {};
-                          });
-                        }}
-                        className="p-1.5 hover:bg-white/10 rounded-lg transition-all"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-[11px] font-black w-6 text-center text-blue-400">
-                        {allHallConfigs[selectedHall]?.elements?.find(el => selectedElementIds.has(el.id) && el.type.includes('table'))?.chairCount || 8}
-                      </span>
-                      <button 
-                        onClick={() => {
-                          handleUpdateElements(Array.from(selectedElementIds), (el) => {
-                            if (el.type.includes('table')) {
-                              return { chairCount: Math.min(24, (el.chairCount || 8) + 1) };
-                            }
-                            return {};
-                          });
-                        }}
-                        className="p-1.5 hover:bg-white/10 rounded-lg transition-all"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                <div className="w-[1px] h-6 bg-slate-700/50 mx-1" />
-
-                <button 
-                  onClick={() => handleRemoveElements(Array.from(selectedElementIds))}
-                  className="p-2.5 hover:bg-rose-500/20 text-rose-400 rounded-xl transition-all active:scale-90"
-                  title="Sil"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </motion.div>
-
-              {/* Secondary Toolbar: Alignment & Grouping */}
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-slate-900/90 backdrop-blur-lg text-white rounded-xl shadow-xl p-1 flex items-center gap-0.5 border border-slate-700/30"
-              >
-                <button onClick={handleGroupElements} className="p-2 hover:bg-white/10 rounded-lg transition-all" title="Grupla"><Group className="w-4 h-4" /></button>
-                <button onClick={handleUngroupElements} className="p-2 hover:bg-white/10 rounded-lg transition-all" title="Grubu Çöz"><Ungroup className="w-4 h-4" /></button>
-                
-                {selectedElementIds.size > 1 && (
-                  <>
-                    <div className="w-[1px] h-4 bg-slate-700/50 mx-1" />
-                    <button onClick={() => handleAlignElements('left')} className="p-2 hover:bg-white/10 rounded-lg" title="Sola Hizala"><AlignLeft className="w-4 h-4" /></button>
-                    <button onClick={() => handleAlignElements('top')} className="p-2 hover:bg-white/10 rounded-lg" title="Üste Hizala"><AlignStartVertical className="w-4 h-4 rotate-90" /></button>
-                    <button onClick={() => handleAlignElements('center-h')} className="p-2 hover:bg-white/10 rounded-lg" title="Yatay Orta"><AlignCenter className="w-4 h-4" /></button>
-                    <button onClick={() => handleAlignElements('center-v')} className="p-2 hover:bg-white/10 rounded-lg" title="Dikey Orta"><AlignJustify className="w-4 h-4 rotate-90" /></button>
-                    <div className="w-[1px] h-4 bg-slate-700/50 mx-1" />
-                    <button onClick={() => handleDistributeElements('horizontal')} className="p-2 hover:bg-white/10 rounded-lg" title="Yatay Dağıt"><AlignStartVertical className="w-4 h-4" /></button>
-                    <button onClick={() => handleDistributeElements('vertical')} className="p-2 hover:bg-white/10 rounded-lg" title="Dikey Dağıt"><AlignEndVertical className="w-4 h-4 rotate-90" /></button>
-                  </>
-                )}
-              </motion.div>
-
-              {/* Label Bar */}
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-slate-900/95 backdrop-blur-md border border-slate-700/50 rounded-2xl p-1 shadow-2xl flex items-center gap-2 w-72"
-              >
-                <div className="bg-blue-600 px-3 py-1.5 rounded-xl text-[9px] font-black text-white uppercase tracking-tighter shrink-0 shadow-lg shadow-blue-500/20">
-                  {selectedElementIds.size === 1 ? 'ETİKET' : 'TOPLU'}
+                <div className="px-1 group-hover:px-3 min-w-[40px] group-hover:min-w-[60px] text-center transition-all">
+                  <span className="text-[9px] group-hover:text-[10px] font-black text-blue-400 font-mono">%{Math.round(zoom * 100)}</span>
                 </div>
-                <input 
-                  type="text"
-                  placeholder="İSİMLENDİR..."
-                  value={selectedElementIds.size === 1 ? (allHallConfigs[selectedHall]?.elements?.find(el => selectedElementIds.has(el.id))?.label || allHallConfigs[selectedHall]?.elements?.find(el => selectedElementIds.has(el.id))?.seatNumber || '') : ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    handleUpdateElements(Array.from(selectedElementIds), (el) => ({
-                      [el.type === 'chair' ? 'seatNumber' : 'label']: val
-                    }));
-                  }}
-                  className="w-full bg-transparent px-2 py-1 text-[11px] font-bold uppercase text-white focus:outline-none placeholder:text-slate-500"
-                />
-              </motion.div>
-            </div>
-          )}
+                <button 
+                  onClick={() => setZoom(prev => Math.min(2, prev + 0.1))}
+                  className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all"
+                  title="Yakınlaştır"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-          <div className="absolute top-6 right-8 z-20 flex flex-col gap-3 items-end">
-            {/* Undo/Redo Controls */}
-            <div className="bg-white p-1 rounded-2xl shadow-xl border border-slate-200 flex flex-col w-12">
-              <button 
-                onClick={handleUndo} 
-                disabled={!canUndo}
-                className={`p-3 rounded-xl transition-all ${canUndo ? 'text-slate-600 hover:bg-blue-50 hover:text-blue-600' : 'text-slate-200 cursor-not-allowed'}`}
-                title="Geri Al (Ctrl+Z)"
-              >
-                <Undo2 className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={handleRedo} 
-                disabled={!canRedo}
-                className={`p-3 rounded-xl transition-all ${canRedo ? 'text-slate-600 hover:bg-blue-50 hover:text-blue-600' : 'text-slate-200 cursor-not-allowed'}`}
-                title="İleri Al (Ctrl+Shift+Z)"
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
-            </div>
+              <div className="w-px h-4 group-hover:h-6 bg-slate-700/30 group-hover:bg-slate-700/50 mx-0.5 group-hover:mx-1 transition-all" />
 
-            {/* Zoom Controls - Static */}
-            <div className="bg-white p-1 rounded-2xl shadow-xl border border-slate-200 flex flex-col w-12">
-              <button onClick={() => setZoom(prev => Math.min(2, prev + 0.1))} className="p-3 hover:bg-blue-50 rounded-xl transition-all text-slate-400 hover:text-blue-600"><ZoomIn className="w-5 h-5" /></button>
-              <button onClick={() => setZoom(0.8)} className="p-2 text-[10px] font-black text-slate-300 hover:text-blue-600 uppercase text-center">RST</button>
-              <button onClick={() => setZoom(prev => Math.max(0.2, prev - 0.1))} className="p-3 hover:bg-blue-50 rounded-xl transition-all text-slate-400 hover:text-blue-600"><ZoomOut className="w-5 h-5" /></button>
-            </div>
+              <div className="flex items-center gap-0.5 group-hover:gap-1">
+                <button 
+                  onClick={() => setShowGrid(!showGrid)}
+                  className={`p-1.5 group-hover:p-2.5 rounded-lg group-hover:rounded-xl transition-all flex items-center gap-2 ${showGrid ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  title="Izgarayı Göster/Gizle"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 group-hover:w-4 h-4" />
+                  <span className="text-[9px] font-black uppercase tracking-widest hidden group-hover:block transition-all">Izgara</span>
+                </button>
+                <button 
+                  onClick={() => setShowDimensions(!showDimensions)}
+                  className={`p-1.5 group-hover:p-2.5 rounded-lg group-hover:rounded-xl transition-all flex items-center gap-2 ${showDimensions ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  title="Ölçüleri Göster/Gizle"
+                >
+                  <Ruler className="w-3.5 h-3.5 group-hover:w-4 h-4" />
+                  <span className="text-[9px] font-black uppercase tracking-widest hidden group-hover:block transition-all">Ölçüler</span>
+                </button>
+                <button 
+                  onClick={() => setSnapToGrid(!snapToGrid)}
+                  className={`p-1.5 group-hover:p-2.5 rounded-lg group-hover:rounded-xl transition-all flex items-center gap-2 ${snapToGrid ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  title="Mıknatıs (Snap) Aç/Kapat"
+                >
+                  <Sparkles className="w-3.5 h-3.5 group-hover:w-4 h-4" />
+                  <span className="text-[9px] font-black uppercase tracking-widest hidden group-hover:block transition-all">Yapış</span>
+                </button>
+              </div>
 
-            {/* Clear All - Expanding */}
-            {(activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library') && (
-              <button 
-                onClick={() => {
-                  const currentHall = allHallConfigs[selectedHall];
-                  if (currentHall) {
-                    updateHall({ ...currentHall, elements: [], rows: [], stage: undefined });
-                    setSeating({}); // Clear all seating assignments
-                  }
-                }}
-                className="bg-rose-600 hover:bg-rose-700 text-white h-12 min-w-[3rem] rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 group overflow-hidden px-3.5"
-              >
-                <Trash2 className="w-5 h-5 shrink-0" />
-                <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 w-0 group-hover:w-auto transition-all duration-300">Tümünü Temizle</span>
-              </button>
-            )}
+              <div className="w-px h-4 group-hover:h-6 bg-slate-700/30 group-hover:bg-slate-700/50 mx-0.5 group-hover:mx-1 transition-all" />
 
-            {/* Undo - Expanding */}
-            {(activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library') && (
               <button 
-                onClick={handleUndo}
-                disabled={history.length === 0}
-                className={`h-12 min-w-[3rem] rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 group overflow-hidden px-3.5 ${
-                  history.length === 0 ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-600 text-white'
-                }`}
+                onClick={() => setZoom(0.8)}
+                className="p-1.5 group-hover:p-2.5 hover:bg-slate-800 rounded-lg group-hover:rounded-xl text-slate-400 hover:text-white transition-all flex items-center gap-2"
+                title="Ekrana Sığdır"
               >
-                <Undo2 className="w-5 h-5 shrink-0" />
-                <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 w-0 group-hover:w-auto transition-all duration-300">Geri Al</span>
+                <Maximize2 className="w-3.5 h-3.5 group-hover:w-4 h-4" />
+                <span className="text-[9px] font-black uppercase tracking-widest hidden group-hover:block transition-all">Sığdır</span>
               </button>
-            )}
 
-            {/* Add Row - Expanding */}
-            {(activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library') && (
-              <button 
-                onClick={() => {
-                  const currentHall = allHallConfigs[selectedHall];
-                  if (!currentHall) return;
-                  const lastRowChar = currentHall.rows.length > 0 ? currentHall.rows[currentHall.rows.length - 1].row : '@';
-                  const nextRowChar = String.fromCharCode(lastRowChar.charCodeAt(0) + 1);
-                  const newRows = [...currentHall.rows, { row: nextRowChar, seats: Array.from({ length: 10 }, (_, i) => ({ number: (i + 1).toString(), type: 'seat' })) }];
-                  updateHall({ ...currentHall, rows: newRows });
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white h-12 min-w-[3rem] rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 group overflow-hidden px-3.5"
-              >
-                <Plus className="w-5 h-5 shrink-0" />
-                <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 w-0 group-hover:w-auto transition-all duration-300">Yeni Sıra Ekle</span>
-              </button>
-            )}
+              <div className="w-px h-4 group-hover:h-6 bg-slate-700/30 group-hover:bg-slate-700/50 mx-0.5 group-hover:mx-1 transition-all" />
+
+              <div className="flex items-center gap-0.5 group-hover:gap-1">
+                <button 
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  className={`p-1.5 group-hover:p-2.5 rounded-lg group-hover:rounded-xl transition-all ${canUndo ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-700 cursor-not-allowed'}`}
+                  title="Geri Al (CTRL+Z)"
+                >
+                  <Undo2 className="w-3.5 h-3.5 group-hover:w-4 h-4" />
+                </button>
+                <button 
+                  onClick={handleRedo}
+                  disabled={!canRedo}
+                  className={`p-1.5 group-hover:p-2.5 rounded-lg group-hover:rounded-xl transition-all ${canRedo ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-700 cursor-not-allowed'}`}
+                  title="İleri Al (CTRL+Y)"
+                >
+                  <Redo2 className="w-3.5 h-3.5 group-hover:w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
           </div>
-          
-          <div className="flex-1 w-full overflow-auto flex justify-center items-start pt-16 scrollbar-hide">
-              {(selectedHall && allHallConfigs[selectedHall]) || activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library' ? (
-                <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className="transition-transform duration-300 ease-out p-12">
-                    <SeatingPlan 
-                      hall={allHallConfigs[selectedHall] || { 
-                        name: 'YENİ TASARIM', 
-                        rows: [], 
-                        elements: [
-                          { id: 'default-stage', type: 'stage', x: 200, y: 0, rotation: 0, width: 400, height: 100, label: 'SAHNE' }
-                        ], 
-                        stage: undefined 
-                      }} 
-                      seating={seating} 
-                      onSeatClick={(id) => { setActiveSeatId(id); setGuestModalOpen(true); }}
-                      isEditable={activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library'}
-                      onUpdateHall={updateHall}
-                      zoom={zoom}
-                      previewElements={previewElements}
-                      selectedElementIds={selectedElementIds}
-                      setSelectedElementIds={setSelectedElementIds}
-                      onUndo={handleUndo}
-                      onRedo={handleRedo}
-                      getTemplateElements={getTemplateElements}
-                      blockRows={blockRows}
-                      blockChairs={blockChairs}
-                      handleRemoveElements={handleRemoveElements}
-                      handleDuplicateElements={handleDuplicateElements}
-                      handleReorderElements={handleReorderElements}
-                      handleAlignElements={handleAlignElements}
-                      handleDistributeElements={handleDistributeElements}
-                      handleGroupElements={handleGroupElements}
-                      handleUngroupElements={handleUngroupElements}
-                      handleUpdateElements={handleUpdateElements}
-                      selectionBoundingBox={selectionBoundingBox}
-                    />
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full w-full gap-12 p-12 animate-in fade-in zoom-in duration-700">
-                  <div className="text-center space-y-4 max-w-xl">
-                    <div className="w-24 h-24 bg-blue-600 rounded-[40px] flex items-center justify-center mx-auto shadow-2xl shadow-blue-200 mb-8">
-                      <Plus className="w-12 h-12 text-white" />
-                    </div>
-                    <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Yeni Salon Tasarımı Başlat</h3>
-                    <p className="text-lg font-bold text-slate-400 leading-relaxed">
-                      <b>{selectedCity}</b> şehri için henüz bir salon tasarımı bulunamadı. <br />
-                      Aşağıdaki araçları kullanarak ilk salonunuzu tasarlamaya başlayın.
-                    </p>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
-                    <div className="p-8 bg-white rounded-[32px] border-2 border-slate-100 shadow-xl hover:border-blue-500 transition-all group cursor-pointer" onClick={() => setIsHallAnalysisOpen(true)}>
-                      <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-600 transition-all">
-                        <Sparkles className="w-7 h-7 text-blue-600 group-hover:text-white transition-all" />
+            <div className="flex-1 w-full overflow-auto flex justify-center items-start pt-20 scrollbar-hide">
+                {(selectedHall && allHallConfigs[selectedHall]) || activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library' ? (
+                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className="transition-transform duration-300 ease-out p-12">
+                      <SeatingPlan 
+                        hall={allHallConfigs[selectedHall] || { 
+                          name: 'YENİ TASARIM', 
+                          rows: [], 
+                          elements: [
+                            { id: 'default-stage', type: 'stage', x: 200, y: 0, rotation: 0, width: 400, height: 100, label: 'SAHNE' }
+                          ], 
+                          stage: undefined 
+                        }} 
+                        seating={seating} 
+                        onSeatClick={(id) => { setActiveSeatId(id); setGuestModalOpen(true); }}
+                        isEditable={activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library'}
+                        isCalibrating={isCalibrating}
+                        isDrawingDimension={isDrawingDimension}
+                        isTapeMeasuring={isTapeMeasuring}
+                        isDrawingPolygon={isDrawingPolygon}
+                        isDrawingSunAngle={isDrawingSunAngle}
+                        onCalibrationComplete={(pixelDist) => {
+                          setIsCalibrating(false);
+                          setLastPixelDist(pixelDist);
+                          setCalibrationModalOpen(true);
+                        }}
+                        onCancelCalibration={() => setIsCalibrating(false)}
+                        onToggleDrawingDimension={() => setIsDrawingDimension(!isDrawingDimension)}
+                        onToggleTapeMeasuring={() => setIsTapeMeasuring(!isTapeMeasuring)}
+                        onToggleDrawingPolygon={() => {
+                          setIsDrawingPolygon(!isDrawingPolygon);
+                          setIsCalibrating(false);
+                          setIsDrawingDimension(false);
+                          setIsTapeMeasuring(false);
+                          setIsDrawingSunAngle(false);
+                          setPreviewElements(null);
+                        }}
+                        onToggleDrawingSunAngle={() => {
+                          setIsDrawingSunAngle(!isDrawingSunAngle);
+                          setIsCalibrating(false);
+                          setIsDrawingDimension(false);
+                          setIsTapeMeasuring(false);
+                          setIsDrawingPolygon(false);
+                          setPreviewElements(null);
+                        }}
+                        onUpdateHall={updateHall}
+                        zoom={zoom}
+                        previewElements={previewElements}
+                        selectedElementIds={selectedElementIds}
+                        setSelectedElementIds={setSelectedElementIds}
+                        onUndo={handleUndo}
+                        onRedo={handleRedo}
+                        getTemplateElements={getTemplateElements}
+                        blockRows={blockRows}
+                        blockChairs={blockChairs}
+                        handleRemoveElements={handleRemoveElements}
+                        handleDuplicateElements={handleDuplicateElements}
+                        handleReorderElements={handleReorderElements}
+                        handleAlignElements={handleAlignElements}
+                        handleDistributeElements={handleDistributeElements}
+                        handleGroupElements={handleGroupElements}
+                        handleUngroupElements={handleUngroupElements}
+                        handleUpdateElements={handleUpdateElements}
+                        selectionBoundingBox={selectionBoundingBox}
+                        snapToGrid={snapToGrid}
+                        showGrid={showGrid}
+                        showDimensions={showDimensions}
+                        is3DMode={is3DMode}
+                        onFileChange={setInvitationFile}
+                        referenceImages={referenceImages}
+                        onUpdateReferenceImage={handleUpdateReferenceImage}
+                      />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full w-full gap-12 p-12 animate-in fade-in zoom-in duration-700">
+                    <div className="text-center space-y-4 max-w-xl">
+                      <div className="w-24 h-24 bg-blue-600 rounded-[40px] flex items-center justify-center mx-auto shadow-2xl shadow-blue-200 mb-8">
+                        <Plus className="w-12 h-12 text-white" />
                       </div>
-                      <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">AI Analiz Modu</h4>
-                      <p className="text-sm font-bold text-slate-400 leading-relaxed">
-                        Mevcut bir salon planının fotoğrafını veya PDF'ini yükleyin, AI sizin için otomatik olarak koltuk düzenini oluştursun.
+                      <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Yeni Salon Tasarımı Başlat</h3>
+                      <p className="text-lg font-bold text-slate-400 leading-relaxed">
+                        <b>{selectedCity}</b> şehri için henüz bir salon tasarımı bulunamadı. <br />
+                        Aşağıdaki araçları kullanarak ilk salonunuzu tasarlamaya başlayın.
                       </p>
                     </div>
 
-                    <div className="p-8 bg-white rounded-[32px] border-2 border-slate-100 shadow-xl hover:border-blue-500 transition-all group cursor-pointer" onClick={handleStartFreeDraw}>
-                      <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-emerald-600 transition-all">
-                        <Edit2 className="w-7 h-7 text-emerald-600 group-hover:text-white transition-all" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+                      <div className="p-8 bg-white rounded-[32px] border-2 border-slate-100 shadow-xl hover:border-blue-500 transition-all group cursor-pointer" onClick={() => setIsHallAnalysisOpen(true)}>
+                        <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-600 transition-all">
+                          <Sparkles className="w-7 h-7 text-blue-600 group-hover:text-white transition-all" />
+                        </div>
+                        <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">AI Analiz Modu</h4>
+                        <p className="text-sm font-bold text-slate-400 leading-relaxed">
+                          Mevcut bir salon planının fotoğrafını veya PDF'ini yükleyin, AI sizin için otomatik olarak koltuk düzenini oluştursun.
+                        </p>
                       </div>
-                      <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">Serbest Çizim</h4>
-                      <p className="text-sm font-bold text-slate-400 leading-relaxed">
-                        Kendi salon düzeninizi sıfırdan oluşturun. Sahne konumu, koltuk sıraları ve protokol alanlarını özgürce belirleyin.
-                      </p>
+
+                      <div className="p-8 bg-white rounded-[32px] border-2 border-slate-100 shadow-xl hover:border-blue-500 transition-all group cursor-pointer" onClick={handleStartFreeDraw}>
+                        <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-emerald-600 transition-all">
+                          <Edit2 className="w-7 h-7 text-emerald-600 group-hover:text-white transition-all" />
+                        </div>
+                        <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">Serbest Çizim</h4>
+                        <p className="text-sm font-bold text-slate-400 leading-relaxed">
+                          Kendi salon düzeninizi sıfırdan oluşturun. Sahne konumu, koltuk sıraları ve protokol alanlarını özgürce belirleyin.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+            </div>
           </div>
+
+          {/* Right Inspector Sidebar */}
+          <RightSidebar 
+            isOpen={isRightPanelOpen || selectedElementIds.size > 0}
+            onClose={() => {
+              setIsRightPanelOpen(false);
+              setSelectedElementIds(new Set());
+            }}
+            selectedElementIds={selectedElementIds}
+            hall={allHallConfigs[selectedHall] || { name: 'YENİ TASARIM', rows: [], elements: [] }}
+            onAlign={handleAlignElements}
+            onDistribute={handleDistributeElements}
+            onGroup={handleGroupElements}
+            onUngroup={handleUngroupElements}
+            onDuplicate={() => handleDuplicateElements(Array.from(selectedElementIds))}
+            onReorder={(dir) => handleReorderElements(Array.from(selectedElementIds), dir)}
+            onUpdateElements={handleUpdateElements}
+            onRemove={handleRemoveElements}
+            onAddElement={handleAddElement}
+            onSaveHall={handleSaveHall}
+            onUpdateHall={handleUpdateHall}
+            selectedCity={selectedCity}
+            activeLayoutTab={activeLayoutTab}
+            isCalibrating={isCalibrating}
+            isDrawingDimension={isDrawingDimension}
+            isTapeMeasuring={isTapeMeasuring}
+            isDrawingPolygon={isDrawingPolygon}
+            isDrawingSunAngle={isDrawingSunAngle}
+            is3DMode={is3DMode}
+            onToggle3DMode={() => setIs3DMode(!is3DMode)}
+            onAddReferenceImage={handleAddReferenceImage}
+            onRemoveReferenceImage={handleRemoveReferenceImage}
+            onUpdateReferenceImage={handleUpdateReferenceImage}
+            referenceImages={referenceImages}
+            onStartCalibration={(pixelDist) => {
+              if (typeof pixelDist === 'number') {
+                setLastPixelDist(pixelDist);
+                setCalibrationModalOpen(true);
+              } else {
+                setIsCalibrating(true);
+              }
+            }}
+            onCancelCalibration={() => setIsCalibrating(false)}
+            onToggleDrawingDimension={() => setIsDrawingDimension(!isDrawingDimension)}
+            onToggleTapeMeasuring={() => setIsTapeMeasuring(!isTapeMeasuring)}
+            onToggleDrawingPolygon={() => {
+              setIsDrawingPolygon(!isDrawingPolygon);
+              setIsCalibrating(false);
+              setIsDrawingDimension(false);
+              setIsTapeMeasuring(false);
+              setIsDrawingSunAngle(false);
+              setPreviewElements(null);
+            }}
+            onToggleDrawingSunAngle={() => {
+              setIsDrawingSunAngle(!isDrawingSunAngle);
+              setIsCalibrating(false);
+              setIsDrawingDimension(false);
+              setIsTapeMeasuring(false);
+              setIsDrawingPolygon(false);
+              setPreviewElements(null);
+            }}
+            onStartFreeDraw={handleStartFreeDraw}
+            getTemplateElements={getTemplateElements}
+          />
         </main>
       </div>
       <GuestModal 
@@ -1917,6 +2033,80 @@ const App: React.FC = () => {
           setGuestModalOpen(false);
         }}
       />
+      <AnimatePresence>
+        {calibrationModalOpen && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100"
+            >
+              <div className="p-8 space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+                    <Ruler className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Ölçek Tanımla</h3>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Gerçek Dünya Ölçüsü</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-6 rounded-3xl border-2 border-slate-100 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seçilen Mesafe</span>
+                    <span className="text-xs font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{Math.round(lastPixelDist)} PX</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Gerçek Mesafe (Metre)</label>
+                    <div className="relative">
+                      <input 
+                        type="number"
+                        step="0.1"
+                        value={realDistInput}
+                        onChange={(e) => setRealDistInput(e.target.value)}
+                        className="w-full bg-white border-2 border-slate-200 rounded-2xl py-4 px-6 text-lg font-black text-slate-800 outline-none focus:border-blue-500 transition-all shadow-sm"
+                        autoFocus
+                      />
+                      <div className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 font-black">METRE</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    onClick={() => setCalibrationModalOpen(false)}
+                    className="py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95"
+                  >
+                    İptal
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const realDist = parseFloat(realDistInput);
+                      if (!isNaN(realDist) && realDist > 0) {
+                        handleUpdateHall({
+                          ...allHallConfigs[selectedHall],
+                          scaleCalibration: {
+                            pixelDistance: lastPixelDist,
+                            realDistance: realDist,
+                            unit: 'm'
+                          }
+                        });
+                        setCalibrationModalOpen(false);
+                      }
+                    }}
+                    className="py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-100 active:scale-95"
+                  >
+                    Kaydet
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       <DataImportPanel 
         isOpen={isImportPanelOpen}
         onClose={() => setIsImportPanelOpen(false)}
