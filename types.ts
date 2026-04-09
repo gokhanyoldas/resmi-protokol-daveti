@@ -31,6 +31,16 @@ export interface HallRow {
   }[];
 }
 
+export interface SceneObject {
+  id: string;
+  type: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  color?: string;
+  label?: string;
+}
+
 export interface HallElement {
   id: string;
   type: 'chair' | 'table-round' | 'table-rect' | 'table-square' | 'stage' | 'led-screen' | 'ui-button' | 'wall' | 'door' | 'window' | 'decor' | 'plant' | 'bar' | 'text' | 'dimension-line' | 'work-area' | 'polygon' | 'sun-angle' | 'tree' | 'car' | 'building' | 'road' | 'person' | 'ambulance' | 'catering-truck' | 'security-post' | 'truss-stage' | 'truck-stage' | 'generator-truck' | 'bistro-table';

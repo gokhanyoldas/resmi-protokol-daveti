@@ -103,17 +103,17 @@ const Element3DProxy = ({
   const y3d = (el.y - workspaceHeight / 2) / scaleY;
 
   let actualHeight = (el.h || 0) * 0.5 + 0.1;
-  let color = el.color || '#f8fafc';
+  let color = el.color || '#f8f8f7'; // Off-white default
   let label = el.label || '';
 
   // Type specific heights and colors
   if (el.type === 'led-screen') actualHeight = 4;
   else if (el.type === 'stage') actualHeight = 1.2;
-  else if (el.type === 'truss-stage') { actualHeight = 5; color = '#94a3b8'; }
-  else if (el.type === 'truck-stage') { actualHeight = 4.5; color = '#475569'; }
-  else if (el.type === 'generator-truck') { actualHeight = 3; color = '#d97706'; }
-  else if (el.type === 'catering-truck') { actualHeight = 3.5; color = '#059669'; }
-  else if (el.type === 'bistro-table') { actualHeight = 1.1; color = '#334155'; }
+  else if (el.type === 'truss-stage') { actualHeight = 5; color = '#f1f5f9'; }
+  else if (el.type === 'truck-stage') { actualHeight = 4.5; color = '#f8fafc'; }
+  else if (el.type === 'generator-truck') { actualHeight = 3; color = '#f1f5f9'; }
+  else if (el.type === 'catering-truck') { actualHeight = 3.5; color = '#f8fafc'; }
+  else if (el.type === 'bistro-table') { actualHeight = 1.1; color = '#f1f5f9'; }
   else if (el.type === 'tree') actualHeight = 6;
   else if (el.type === 'car' || el.type === 'ambulance') actualHeight = 2;
   else if (el.type === 'person') actualHeight = 1.8;
@@ -124,13 +124,18 @@ const Element3DProxy = ({
   const handleDragEnd = (e: any) => {
     onDraggingChange?.(false);
     if (!transformRef.current) return;
-    const { position } = transformRef.current.object;
+    const { position, rotation, scale } = transformRef.current.object;
     
     // Convert back to 2D coordinates
     const newX = position.x * scaleX + workspaceWidth / 2;
     const newY = position.z * scaleY + workspaceHeight / 2;
     
-    onUpdateElements?.([el.id], () => ({ x: newX, y: newY }));
+    // Sync with main state
+    onUpdateElements?.([el.id], () => ({ 
+      x: newX, 
+      y: newY,
+      rotation: -rotation.y * (180 / Math.PI) // Convert back to degrees
+    }));
   };
 
   const handleDragStart = () => {
@@ -139,30 +144,35 @@ const Element3DProxy = ({
 
   return (
     <group>
-      {isSelected && (
+      {isSelected ? (
         <TransformControls 
           ref={transformRef}
           position={[x3d, actualHeight / 2, y3d]} 
+          rotation={[0, -(el.rotation * Math.PI) / 180, 0]}
           mode="translate" 
           onMouseDown={handleDragStart}
           onMouseUp={handleDragEnd}
           showY={false} // Only move on XZ plane
         >
-          <mesh 
-            castShadow 
-            receiveShadow 
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectElements?.(new Set([el.id]));
-            }}
-          >
-            <boxGeometry args={[width, actualHeight, depth]} />
-            <meshStandardMaterial color={color} roughness={0.5} />
-          </mesh>
+          <group>
+            <mesh 
+              castShadow 
+              receiveShadow 
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectElements?.(new Set([el.id]));
+              }}
+            >
+              <boxGeometry args={[width, actualHeight, depth]} />
+              <meshStandardMaterial color={color} roughness={0.1} metalness={0.05} />
+            </mesh>
+            <lineSegments>
+              <edgesGeometry args={[new THREE.BoxGeometry(width, actualHeight, depth)]} />
+              <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.6} />
+            </lineSegments>
+          </group>
         </TransformControls>
-      )}
-
-      {!isSelected && (
+      ) : (
         <group position={[x3d, actualHeight / 2, y3d]} rotation={[0, -(el.rotation * Math.PI) / 180, 0]}>
           <mesh 
             castShadow 
@@ -173,8 +183,12 @@ const Element3DProxy = ({
             }}
           >
             <boxGeometry args={[width, actualHeight, depth]} />
-            <meshStandardMaterial color={color} roughness={0.5} />
+            <meshStandardMaterial color={color} roughness={0.1} metalness={0.05} />
           </mesh>
+          <lineSegments>
+            <edgesGeometry args={[new THREE.BoxGeometry(width, actualHeight, depth)]} />
+            <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.4} />
+          </lineSegments>
           {label && (
             <Html position={[0, actualHeight / 2 + 0.5, 0]} center>
               <div className="bg-slate-900/80 backdrop-blur-sm text-white text-[8px] font-black px-2 py-0.5 rounded border border-white/20 whitespace-nowrap pointer-events-none uppercase tracking-tighter">
@@ -189,8 +203,11 @@ const Element3DProxy = ({
 };
 
 const VenueGround = ({ imageUrl, realWidth = 40, realHeight = 25 }: { imageUrl: string, realWidth?: number, realHeight?: number }) => {
-  const texture = useTexture(imageUrl);
+  // Use the requested texture name if available, otherwise fallback to provided imageUrl
+  const texturePath = imageUrl || 'ula-kadın-konagi.jpg';
+  const texture = useTexture(texturePath);
   texture.anisotropy = 16;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.01, 0]}>
@@ -251,17 +268,24 @@ const ExtrudedBuilding = ({
   }), [height]);
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]} castShadow receiveShadow>
-      <extrudeGeometry args={[shape, extrudeSettings]} />
-      <meshStandardMaterial 
-        color={color} 
-        transparent={opacity < 1} 
-        opacity={opacity} 
-        roughness={0.2} 
-        metalness={0.1}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
+    <group rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
+      <mesh castShadow receiveShadow>
+        <extrudeGeometry args={[shape, extrudeSettings]} />
+        <meshStandardMaterial 
+          color="#f8f8f7" // Off-white
+          transparent={opacity < 1} 
+          opacity={opacity} 
+          roughness={0.1} 
+          metalness={0.05}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {/* Edge Lines for Model Aesthetic */}
+      <lineSegments>
+        <edgesGeometry args={[new THREE.ExtrudeGeometry(shape, extrudeSettings)]} />
+        <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.4} />
+      </lineSegments>
+    </group>
   );
 };
 
@@ -342,12 +366,22 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const dronePhotoUrl = hall.backgroundImage;
   const [isDragging, setIsDragging] = React.useState(false);
   const [sunTime, setSunTime] = React.useState(14); // Default to 14:00
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   // Calibration and Dimensions
   const realWidth = hall.scaleCalibration?.realDistance || 40;
   const realHeight = (realWidth * (hall.height || 800)) / (hall.width || 1200);
   const workspaceWidth = hall.width || 1200;
   const workspaceHeight = hall.height || 800;
+
+  // Sync local selectedId with prop selectedElementIds
+  React.useEffect(() => {
+    if (selectedElementIds.size > 0) {
+      setSelectedId(Array.from(selectedElementIds)[0]);
+    } else {
+      setSelectedId(null);
+    }
+  }, [selectedElementIds]);
 
   return (
     <div className="w-full h-full bg-slate-900 rounded-[40px] overflow-hidden relative border-4 border-slate-800 shadow-inner">
@@ -406,9 +440,19 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         </div>
       </div>
 
-      <Canvas shadows gl={{ antialias: true, preserveDrawingBuffer: true }}>
+      <Canvas 
+        shadows 
+        gl={{ antialias: true, preserveDrawingBuffer: true }} 
+        onPointerMissed={() => onSelectElements?.(new Set())}
+      >
         <PerspectiveCamera makeDefault position={[30, 30, 30]} fov={40} />
-        <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 2.1} enableDamping enabled={!isDragging} />
+        <OrbitControls 
+          makeDefault 
+          minPolarAngle={0} 
+          maxPolarAngle={Math.PI / 2.1} 
+          enableDamping 
+          enabled={!isDragging} 
+        />
         
         <Environment preset="city" />
         <ambientLight intensity={0.4} />
