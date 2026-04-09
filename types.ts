@@ -47,6 +47,7 @@ export interface HallElement {
   x: number;
   y: number;
   points?: { x: number; y: number }[]; // For polygons and roads
+  vertices?: [number, number, number][]; // For 3D buildings
   x2?: number; // For dimension-line and sun-angle
   y2?: number; // For dimension-line and sun-angle
   rotation: number;

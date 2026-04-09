@@ -15,7 +15,7 @@ import {
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { HallConfig, ReferenceImage, HallElement } from '../types';
-import { Monitor, Move } from 'lucide-react';
+import { Monitor, Move, Box } from 'lucide-react';
 
 interface DrawingCanvasProps {
   hall: HallConfig;
@@ -23,6 +23,7 @@ interface DrawingCanvasProps {
   selectedElementIds: Set<string>;
   onUpdateElements?: (ids: string[], updater: (el: HallElement) => Partial<HallElement>) => void;
   onSelectElements?: (ids: Set<string>) => void;
+  onAddElements?: (elements: HallElement[]) => void;
 }
 
 /**
@@ -107,7 +108,8 @@ const Element3DProxy = ({
   let label = el.label || '';
 
   // Type specific heights and colors
-  if (el.type === 'led-screen') actualHeight = 4;
+  if (el.type === 'polygon' || el.type === 'building') actualHeight = el.h || 6;
+  else if (el.type === 'led-screen') actualHeight = 4;
   else if (el.type === 'stage') actualHeight = 1.2;
   else if (el.type === 'truss-stage') { actualHeight = 5; color = '#f1f5f9'; }
   else if (el.type === 'truck-stage') { actualHeight = 4.5; color = '#f8fafc'; }
@@ -124,7 +126,7 @@ const Element3DProxy = ({
   const handleDragEnd = (e: any) => {
     onDraggingChange?.(false);
     if (!transformRef.current) return;
-    const { position, rotation, scale } = transformRef.current.object;
+    const { position, rotation } = transformRef.current.object;
     
     // Convert back to 2D coordinates
     const newX = position.x * scaleX + workspaceWidth / 2;
@@ -142,55 +144,67 @@ const Element3DProxy = ({
     onDraggingChange?.(true);
   };
 
+  const renderGeometry = () => {
+    if ((el.type === 'polygon' || el.type === 'building') && el.points && el.points.length > 0) {
+      return (
+        <ExtrudedBuilding 
+          points={el.points}
+          height={actualHeight}
+          color={color}
+          workspaceWidth={workspaceWidth}
+          workspaceHeight={workspaceHeight}
+          realWidth={realWidth}
+          realHeight={realHeight}
+          isProxy // Flag to indicate it's part of an element proxy
+          isRelative={true} // Traced buildings use relative points from the anchor (el.x, el.y)
+        />
+      );
+    }
+
+    return (
+      <group>
+        <mesh 
+          castShadow 
+          receiveShadow 
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectElements?.(new Set([el.id]));
+          }}
+        >
+          <boxGeometry args={[width, actualHeight, depth]} />
+          <meshStandardMaterial color={color} roughness={0.1} metalness={0.05} />
+        </mesh>
+        <lineSegments>
+          <edgesGeometry args={[new THREE.BoxGeometry(width, actualHeight, depth)]} />
+          <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.6} />
+        </lineSegments>
+      </group>
+    );
+  };
+
   return (
     <group>
       {isSelected ? (
         <TransformControls 
           ref={transformRef}
-          position={[x3d, actualHeight / 2, y3d]} 
+          position={[x3d, 0, y3d]} 
           rotation={[0, -(el.rotation * Math.PI) / 180, 0]}
           mode="translate" 
           onMouseDown={handleDragStart}
           onMouseUp={handleDragEnd}
           showY={false} // Only move on XZ plane
+          enabled={true} 
         >
-          <group>
-            <mesh 
-              castShadow 
-              receiveShadow 
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectElements?.(new Set([el.id]));
-              }}
-            >
-              <boxGeometry args={[width, actualHeight, depth]} />
-              <meshStandardMaterial color={color} roughness={0.1} metalness={0.05} />
-            </mesh>
-            <lineSegments>
-              <edgesGeometry args={[new THREE.BoxGeometry(width, actualHeight, depth)]} />
-              <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.6} />
-            </lineSegments>
-          </group>
+          {renderGeometry()}
         </TransformControls>
       ) : (
-        <group position={[x3d, actualHeight / 2, y3d]} rotation={[0, -(el.rotation * Math.PI) / 180, 0]}>
-          <mesh 
-            castShadow 
-            receiveShadow
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectElements?.(new Set([el.id]));
-            }}
-          >
-            <boxGeometry args={[width, actualHeight, depth]} />
-            <meshStandardMaterial color={color} roughness={0.1} metalness={0.05} />
-          </mesh>
-          <lineSegments>
-            <edgesGeometry args={[new THREE.BoxGeometry(width, actualHeight, depth)]} />
-            <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.4} />
-          </lineSegments>
+        <group 
+          position={[x3d, 0, y3d]} 
+          rotation={[0, -(el.rotation * Math.PI) / 180, 0]}
+        >
+          {renderGeometry()}
           {label && (
-            <Html position={[0, actualHeight / 2 + 0.5, 0]} center>
+            <Html position={[el.type === 'polygon' ? 0 : 0, actualHeight + 0.5, 0]} center>
               <div className="bg-slate-900/80 backdrop-blur-sm text-white text-[8px] font-black px-2 py-0.5 rounded border border-white/20 whitespace-nowrap pointer-events-none uppercase tracking-tighter">
                 {label}
               </div>
@@ -202,7 +216,7 @@ const Element3DProxy = ({
   );
 };
 
-const VenueGround = ({ imageUrl, realWidth = 40, realHeight = 25 }: { imageUrl: string, realWidth?: number, realHeight?: number }) => {
+const VenueGround = ({ imageUrl, realWidth = 40, realHeight = 25, onPointerDown }: { imageUrl: string, realWidth?: number, realHeight?: number, onPointerDown?: (e: any) => void }) => {
   // Use the requested texture name if available, otherwise fallback to provided imageUrl
   const texturePath = imageUrl || 'ula-kadın-konagi.jpg';
   const texture = useTexture(texturePath);
@@ -210,7 +224,12 @@ const VenueGround = ({ imageUrl, realWidth = 40, realHeight = 25 }: { imageUrl: 
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.01, 0]}>
+    <mesh 
+      rotation={[-Math.PI / 2, 0, 0]} 
+      receiveShadow 
+      position={[0, -0.01, 0]}
+      onPointerDown={onPointerDown}
+    >
       <planeGeometry args={[realWidth, realHeight]} />
       <meshStandardMaterial map={texture} roughness={1} metalness={0} />
     </mesh>
@@ -224,11 +243,13 @@ const ExtrudedBuilding = ({
   points, 
   height = 6, 
   color = "#ffffff", 
-  opacity = 0.6,
+  opacity = 1,
   workspaceWidth = 1200,
   workspaceHeight = 800,
   realWidth = 40,
-  realHeight = 25
+  realHeight = 25,
+  isProxy = false,
+  isRelative = false
 }: { 
   points: { x: number, y: number }[], 
   height?: number, 
@@ -237,7 +258,9 @@ const ExtrudedBuilding = ({
   workspaceWidth?: number,
   workspaceHeight?: number,
   realWidth?: number,
-  realHeight?: number
+  realHeight?: number,
+  isProxy?: boolean,
+  isRelative?: boolean
 }) => {
   const shape = useMemo(() => {
     const s = new THREE.Shape();
@@ -246,29 +269,32 @@ const ExtrudedBuilding = ({
     const scaleX = workspaceWidth / realWidth;
     const scaleY = workspaceHeight / realHeight;
 
-    // Convert points to 3D space (centered)
-    const firstPoint = points[0];
-    s.moveTo((firstPoint.x - workspaceWidth / 2) / scaleX, (firstPoint.y - workspaceHeight / 2) / scaleY);
-    
-    for (let i = 1; i < points.length; i++) {
-      s.lineTo((points[i].x - workspaceWidth / 2) / scaleX, (points[i].y - workspaceHeight / 2) / scaleY);
+    if (isRelative) {
+      s.moveTo(points[0].x / scaleX, points[0].y / scaleY);
+      for (let i = 1; i < points.length; i++) {
+        s.lineTo(points[i].x / scaleX, points[i].y / scaleY);
+      }
+    } else {
+      // Convert points to 3D space (centered)
+      const firstPoint = points[0];
+      s.moveTo((firstPoint.x - workspaceWidth / 2) / scaleX, (firstPoint.y - workspaceHeight / 2) / scaleY);
+      
+      for (let i = 1; i < points.length; i++) {
+        s.lineTo((points[i].x - workspaceWidth / 2) / scaleX, (points[i].y - workspaceHeight / 2) / scaleY);
+      }
     }
     s.closePath();
     return s;
-  }, [points, workspaceWidth, workspaceHeight, realWidth, realHeight]);
+  }, [points, workspaceWidth, workspaceHeight, realWidth, realHeight, isRelative]);
 
   const extrudeSettings = useMemo(() => ({
     steps: 1,
     depth: height,
-    bevelEnabled: true,
-    bevelThickness: 0.1,
-    bevelSize: 0.1,
-    bevelOffset: 0,
-    bevelSegments: 1
+    bevelEnabled: false,
   }), [height]);
 
   return (
-    <group rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
+    <group rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
       <mesh castShadow receiveShadow>
         <extrudeGeometry args={[shape, extrudeSettings]} />
         <meshStandardMaterial 
@@ -278,12 +304,13 @@ const ExtrudedBuilding = ({
           roughness={0.1} 
           metalness={0.05}
           side={THREE.DoubleSide}
+          wireframe={true}
         />
       </mesh>
       {/* Edge Lines for Model Aesthetic */}
       <lineSegments>
         <edgesGeometry args={[new THREE.ExtrudeGeometry(shape, extrudeSettings)]} />
-        <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.4} />
+        <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.6} />
       </lineSegments>
     </group>
   );
@@ -361,18 +388,26 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   referenceImages = [], 
   selectedElementIds,
   onUpdateElements,
-  onSelectElements
+  onSelectElements,
+  onAddElements
 }) => {
   const dronePhotoUrl = hall.backgroundImage;
   const [isDragging, setIsDragging] = React.useState(false);
   const [sunTime, setSunTime] = React.useState(14); // Default to 14:00
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  
+  // Tracing State
+  const [isTracingMode, setIsTracingMode] = React.useState(false);
+  const [tracingPoints, setTracingPoints] = React.useState<THREE.Vector3[]>([]);
 
   // Calibration and Dimensions
   const realWidth = hall.scaleCalibration?.realDistance || 40;
   const realHeight = (realWidth * (hall.height || 800)) / (hall.width || 1200);
   const workspaceWidth = hall.width || 1200;
   const workspaceHeight = hall.height || 800;
+
+  const scaleX = workspaceWidth / realWidth;
+  const scaleY = workspaceHeight / realHeight;
 
   // Sync local selectedId with prop selectedElementIds
   React.useEffect(() => {
@@ -382,6 +417,58 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       setSelectedId(null);
     }
   }, [selectedElementIds]);
+
+  const handleGroundClick = (e: any) => {
+    if (!isTracingMode) return;
+    e.stopPropagation();
+    
+    // If clicking near the first point, close the polygon
+    if (tracingPoints.length > 2) {
+      const firstPoint = tracingPoints[0];
+      const dist = firstPoint.distanceTo(e.point);
+      if (dist < 1) {
+        finalizeTracing();
+        return;
+      }
+    }
+    
+    setTracingPoints(prev => [...prev, e.point.clone()]);
+  };
+
+  const finalizeTracing = () => {
+    if (tracingPoints.length < 3) {
+      setIsTracingMode(false);
+      setTracingPoints([]);
+      return;
+    }
+
+    // Use the first point as the anchor (el.x, el.y)
+    const firstP = tracingPoints[0];
+    const anchorX = firstP.x * scaleX + workspaceWidth / 2;
+    const anchorY = firstP.z * scaleY + workspaceHeight / 2;
+
+    // Convert other points to be relative to the anchor
+    const relativePoints = tracingPoints.map(p => ({
+      x: (p.x * scaleX + workspaceWidth / 2) - anchorX,
+      y: (p.z * scaleY + workspaceHeight / 2) - anchorY
+    }));
+
+    const newBuilding: HallElement = {
+      id: Math.random().toString(36).substr(2, 9),
+      type: 'building',
+      x: anchorX,
+      y: anchorY,
+      points: relativePoints,
+      h: 6, // Default height 6m
+      rotation: 0,
+      label: `Bina ${hall.elements?.filter(el => el.type === 'building').length || 0 + 1}`,
+      color: '#f8f8f7'
+    };
+
+    onAddElements?.([newBuilding]);
+    setIsTracingMode(false);
+    setTracingPoints([]);
+  };
 
   return (
     <div className="w-full h-full bg-slate-900 rounded-[40px] overflow-hidden relative border-4 border-slate-800 shadow-inner">
@@ -411,6 +498,35 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               <span>Interaction</span>
               <span className={`${isDragging ? 'text-amber-500 animate-pulse' : 'text-amber-400'} flex items-center gap-1`}><Move className="w-2.5 h-2.5" /> {isDragging ? 'Transforming...' : 'Drag Enabled'}</span>
             </div>
+          </div>
+
+          {/* Tracing Controls */}
+          <div className="mt-6 pt-6 border-t border-white/5 space-y-3 pointer-events-auto">
+            <button 
+              onClick={() => {
+                if (isTracingMode) finalizeTracing();
+                else setIsTracingMode(true);
+              }}
+              className={`w-full py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                isTracingMode 
+                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
+                  : 'bg-white/5 text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              <Box className="w-4 h-4" />
+              {isTracingMode ? 'Çizimi Bitir' : 'Bina Çiz (CAD)'}
+            </button>
+            {isTracingMode && (
+              <button 
+                onClick={() => {
+                  setIsTracingMode(false);
+                  setTracingPoints([]);
+                }}
+                className="w-full py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
+              >
+                İptal Et
+              </button>
+            )}
           </div>
         </div>
 
@@ -461,12 +577,33 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         <SunSimulation time={sunTime} />
 
         {dronePhotoUrl ? (
-          <VenueGround imageUrl={dronePhotoUrl} realWidth={realWidth} realHeight={realHeight} />
+          <VenueGround 
+            imageUrl={dronePhotoUrl} 
+            realWidth={realWidth} 
+            realHeight={realHeight} 
+            onPointerDown={handleGroundClick}
+          />
         ) : (
-          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow onPointerDown={handleGroundClick}>
             <planeGeometry args={[realWidth, realHeight]} />
             <meshStandardMaterial color="#1e293b" />
           </mesh>
+        )}
+
+        {/* Tracing Visualization */}
+        {isTracingMode && tracingPoints.length > 0 && (
+          <group>
+            {tracingPoints.map((p, i) => (
+              <mesh key={i} position={p}>
+                <sphereGeometry args={[0.2, 16, 16]} />
+                <meshBasicMaterial color="#10b981" />
+              </mesh>
+            ))}
+            <line>
+              <bufferGeometry attach="geometry" onUpdate={self => self.setFromPoints([...tracingPoints, tracingPoints[0]])} />
+              <lineBasicMaterial attach="material" color="#10b981" linewidth={2} />
+            </line>
+          </group>
         )}
 
         {/* Surrounding Buildings (Procedural Environment) */}

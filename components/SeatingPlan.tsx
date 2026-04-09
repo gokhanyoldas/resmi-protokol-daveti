@@ -1688,6 +1688,14 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
             selectedElementIds={selectedElementIds} 
             onUpdateElements={handleUpdateElements}
             onSelectElements={setSelectedElementIds}
+            onAddElements={(elements) => {
+              if (onUpdateHall && hall.elements) {
+                onUpdateHall({
+                  ...hall,
+                  elements: [...hall.elements, ...elements]
+                });
+              }
+            }}
           />
           
           <button 
