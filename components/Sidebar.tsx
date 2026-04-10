@@ -1,6 +1,6 @@
 
 import React, { useRef, useMemo, useState } from 'react';
-import { Search, CheckSquare, Square, Heart, Send, CheckCircle2, XCircle, Clock, MessageSquare, Trash2, Upload, X, AlertTriangle, Printer, Tag, RefreshCw, ChevronDown, ChevronUp, MapPin, Database, Layout, Users, Sparkles, Edit2, Check, Plus, Minus, Smartphone, Image as ImageIcon, Grid, Monitor, Coffee, UserCheck, Square as SquareIcon, Circle, Layers, Box, Settings2, Undo2, Redo2, LayoutGrid, Type, Menu, AlignLeft, AlignStartVertical, AlignCenter, AlignJustify, AlignEndVertical, RotateCw, Copy, ArrowUp, ArrowDown, Zap, UserPlus } from 'lucide-react';
+import { Search, CheckSquare, Square, Heart, Send, CheckCircle2, XCircle, Clock, MessageSquare, Trash2, Upload, X, AlertTriangle, Printer, Tag, RefreshCw, ChevronDown, ChevronUp, MapPin, Database, Layout, Users, Sparkles, Edit2, Check, Plus, Minus, Smartphone, Image as ImageIcon, Grid, Monitor, Coffee, UserCheck, Square as SquareIcon, Circle, Layers, Box, Settings2, Undo2, Redo2, LayoutGrid, Type, Menu, AlignLeft, AlignStartVertical, AlignCenter, AlignJustify, AlignEndVertical, RotateCw, Copy, ArrowUp, ArrowDown, Zap, UserPlus, Loader2 } from 'lucide-react';
 import { ProtocolPerson, HallKey, HallConfig, HallElement } from '../types';
 import { TURKEY_CITIES, CITY_HALLS, HALL_CONFIGS } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
@@ -81,6 +81,8 @@ interface SidebarProps {
   setIsCollapsed?: (val: boolean) => void;
   isRightPanelOpen?: boolean;
   setIsRightPanelOpen?: (val: boolean) => void;
+  onTrellisUpload?: (files: File[]) => void;
+  isTrellisGenerating?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -121,9 +123,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   onAlignElements,
   onDistributeElements,
   isRightPanelOpen,
-  setIsRightPanelOpen
+  setIsRightPanelOpen,
+  onTrellisUpload,
+  isTrellisGenerating
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const trellisInputRef = useRef<HTMLInputElement>(null);
   const [magicPrompt, setMagicPrompt] = useState('');
   const [expandedStep, setExpandedStep] = useState<number>(1);
   const [templateSubTab, setTemplateSubTab] = useState<'library' | 'blocks' | 'templates' | 'ai'>('library');
@@ -474,13 +479,80 @@ const Sidebar: React.FC<SidebarProps> = ({
                           </div>
                         )}
                         {activeLayoutTab === 'draw' && (
-                          <div className="flex flex-col items-center justify-center p-8 text-center space-y-4 bg-blue-50/30 rounded-[32px] border-2 border-dashed border-blue-100 animate-in fade-in zoom-in duration-500">
-                            <div className="w-16 h-16 bg-white rounded-[24px] flex items-center justify-center shadow-sm">
-                              <Settings2 className="w-8 h-8 text-blue-300" />
+                          <div className="space-y-4 animate-in fade-in zoom-in duration-500">
+                            <div className="p-6 bg-indigo-50/50 rounded-[32px] border-2 border-indigo-100 flex flex-col items-center text-center space-y-4">
+                              <div className="w-20 h-20 bg-white rounded-[28px] flex items-center justify-center shadow-xl shadow-indigo-100 border border-indigo-50">
+                                <Box className="w-10 h-10 text-indigo-500" />
+                              </div>
+                              <div className="space-y-1">
+                                <h4 className="text-[13px] font-black text-indigo-900 uppercase tracking-widest">TRELLIS AI 3B ÜRETİM</h4>
+                                <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">Görselden 3B Dijital İkiz Oluşturun</p>
+                              </div>
+                              
+                              <button 
+                                onClick={() => trellisInputRef.current?.click()}
+                                disabled={isTrellisGenerating}
+                                className={`w-full py-4 rounded-2xl font-black text-[12px] uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-2xl ${
+                                  isTrellisGenerating 
+                                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
+                                    : 'bg-indigo-600 text-white hover:bg-indigo-500 active:scale-95 shadow-indigo-200'
+                                }`}
+                              >
+                                {isTrellisGenerating ? (
+                                  <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span>Üretiliyor...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles className="w-5 h-5" />
+                                    <span>trellis 3d üret</span>
+                                  </>
+                                )}
+                              </button>
+                              
+                              <input 
+                                type="file" 
+                                ref={trellisInputRef} 
+                                className="hidden" 
+                                multiple 
+                                accept="image/*,video/mp4" 
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files.length > 0) {
+                                    onTrellisUpload?.(Array.from(e.target.files));
+                                  }
+                                }}
+                              />
+
+                              {isTrellisGenerating && (
+                                <motion.div 
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="w-full p-4 bg-white/80 backdrop-blur-md rounded-2xl border border-indigo-100"
+                                >
+                                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-relaxed">
+                                    Veriler TRELLIS AI modeline gönderiliyor, 3B model oluşturuluyor...
+                                  </p>
+                                  <div className="mt-3 w-full h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                                    <motion.div 
+                                      className="h-full bg-indigo-500"
+                                      animate={{ x: ['-100%', '100%'] }}
+                                      transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                                    />
+                                  </div>
+                                </motion.div>
+                              )}
                             </div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                              Çizim ayarları ve araçları <br /> sağ panelde açıldı
-                            </p>
+
+                            <div className="p-5 bg-slate-50 rounded-[28px] border border-slate-200/50 space-y-3">
+                              <div className="flex items-center gap-2 text-slate-400">
+                                <Settings2 className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Manuel Çizim Araçları</span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                                AI üretimi sonrası modelleri sağ paneldeki araçlarla inceleyebilir veya manuel düzenlemeler yapabilirsiniz.
+                              </p>
+                            </div>
                           </div>
                         )}
                         {activeLayoutTab === 'template' && (

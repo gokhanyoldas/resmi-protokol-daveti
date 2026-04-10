@@ -534,61 +534,80 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
 
                       {/* Polygon / Building Specific: Zoning & Height */}
                       {(firstElement.type === 'polygon' || firstElement.type === 'building') && (
-                        <div className="space-y-4 p-4 bg-violet-50/50 rounded-2xl border border-violet-100">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Box className="w-4 h-4 text-violet-500" />
-                              <span className="text-[10px] font-black text-violet-700 uppercase tracking-widest">Maket Özellikleri</span>
+                        <div className="space-y-4">
+                          {firstElement.modelUrl && (
+                            <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Database className="w-3.5 h-3.5 text-indigo-500" />
+                                <span className="text-[9px] font-black text-indigo-700 uppercase tracking-widest">AI Model Kaynağı</span>
+                              </div>
+                              <div className="p-2 bg-white rounded-lg border border-indigo-100 overflow-hidden">
+                                <p className="text-[8px] font-mono text-indigo-400 break-all truncate">
+                                  {firstElement.modelUrl}
+                                </p>
+                              </div>
+                              <p className="text-[9px] text-indigo-400 font-bold italic">
+                                * TRELLIS AI tarafından üretilen yüksek sadakatli 3B model.
+                              </p>
                             </div>
-                          </div>
+                          )}
 
-                          <div className="space-y-2">
-                            <label className="text-[9px] font-black text-violet-700 uppercase tracking-widest">İmar Tipi (Zoning)</label>
-                            <select 
-                              value={firstElement.zoningType || ''}
-                              onChange={(e) => {
-                                const type = e.target.value as any;
-                                const colors: Record<string, string> = {
-                                  residential: '#fde047',
-                                  commercial: '#ef4444',
-                                  green: '#22c55e',
-                                  education: '#3b82f6',
-                                  health: '#a855f7',
-                                  industrial: '#64748b',
-                                  public: '#f97316'
-                                };
-                                onUpdateElements([firstElement.id], () => ({ 
-                                  zoningType: type,
-                                  color: colors[type] || firstElement.color 
-                                }));
-                              }}
-                              className="w-full bg-white border border-violet-100 rounded-xl py-2 px-3 text-xs font-bold text-slate-700 outline-none focus:border-violet-500 transition-all"
-                            >
-                              <option value="">Seçiniz...</option>
-                              <option value="residential">Konut (Sarı)</option>
-                              <option value="commercial">Ticaret (Kırmızı)</option>
-                              <option value="green">Yeşil Alan (Yeşil)</option>
-                              <option value="education">Eğitim (Mavi)</option>
-                              <option value="health">Sağlık (Mor)</option>
-                              <option value="industrial">Sanayi (Gri)</option>
-                              <option value="public">Resmi Kurum (Turuncu)</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
+                          <div className="p-4 bg-violet-50/50 rounded-2xl border border-violet-100 space-y-4">
                             <div className="flex items-center justify-between">
-                              <label className="text-[9px] font-black text-violet-700 uppercase tracking-widest">Bina Yüksekliği (Kat/m)</label>
-                              <span className="text-[10px] font-black text-violet-600">{(firstElement.h || 0).toFixed(1)}</span>
+                              <div className="flex items-center gap-2">
+                                <Box className="w-4 h-4 text-violet-500" />
+                                <span className="text-[10px] font-black text-violet-700 uppercase tracking-widest">Maket Özellikleri</span>
+                              </div>
                             </div>
-                            <input 
-                              type="range"
-                              min="0"
-                              max="100"
-                              step="1"
-                              value={firstElement.h || 0}
-                              onChange={(e) => onUpdateElements([firstElement.id], () => ({ h: parseFloat(e.target.value) }))}
-                              className="w-full accent-violet-500"
-                            />
+
+                            <div className="space-y-2">
+                              <label className="text-[9px] font-black text-violet-700 uppercase tracking-widest">İmar Tipi (Zoning)</label>
+                              <select 
+                                value={firstElement.zoningType || ''}
+                                onChange={(e) => {
+                                  const type = e.target.value as any;
+                                  const colors: Record<string, string> = {
+                                    residential: '#fde047',
+                                    commercial: '#ef4444',
+                                    green: '#22c55e',
+                                    education: '#3b82f6',
+                                    health: '#a855f7',
+                                    industrial: '#64748b',
+                                    public: '#f97316'
+                                  };
+                                  onUpdateElements([firstElement.id], () => ({ 
+                                    zoningType: type,
+                                    color: colors[type] || firstElement.color 
+                                  }));
+                                }}
+                                className="w-full bg-white border border-violet-100 rounded-xl py-2 px-3 text-xs font-bold text-slate-700 outline-none focus:border-violet-500 transition-all"
+                              >
+                                <option value="">Seçiniz...</option>
+                                <option value="residential">Konut (Sarı)</option>
+                                <option value="commercial">Ticaret (Kırmızı)</option>
+                                <option value="green">Yeşil Alan (Yeşil)</option>
+                                <option value="education">Eğitim (Mavi)</option>
+                                <option value="health">Sağlık (Mor)</option>
+                                <option value="industrial">Sanayi (Gri)</option>
+                                <option value="public">Resmi Kurum (Turuncu)</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-[9px] font-black text-violet-700 uppercase tracking-widest">Bina Yüksekliği (Kat/m)</label>
+                                <span className="text-[10px] font-black text-violet-600">{(firstElement.h || 0).toFixed(1)}</span>
+                              </div>
+                              <input 
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="1"
+                                value={firstElement.h || 0}
+                                onChange={(e) => onUpdateElements([firstElement.id], () => ({ h: parseFloat(e.target.value) }))}
+                                className="w-full accent-violet-500"
+                              />
+                            </div>
                           </div>
                         </div>
                       )}

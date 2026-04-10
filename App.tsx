@@ -53,6 +53,7 @@ const App: React.FC = () => {
   const [tableChairCount, setTableChairCount] = useState(8);
   const [is3DMode, setIs3DMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isTrellisGenerating, setIsTrellisGenerating] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -1625,6 +1626,67 @@ const App: React.FC = () => {
     setActiveLayoutTab('draw');
   };
 
+  const handleTrellisUpload = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    
+    setIsTrellisGenerating(true);
+    setIs3DMode(true); // Switch to 3D mode instantly
+    
+    const firstFile = files[0];
+    const isImage = firstFile.type.startsWith('image/');
+    
+    if (isImage) {
+      const url = URL.createObjectURL(firstFile);
+      // Set as background image for the current hall
+      setDynamicHalls(prev => {
+        const currentHall = prev[selectedHall] || allHallConfigs[selectedHall];
+        if (!currentHall) return prev;
+        
+        const updatedHall: HallConfig = {
+          ...currentHall,
+          backgroundImage: url
+        };
+
+        return {
+          ...prev,
+          [selectedHall]: updatedHall
+        };
+      });
+    }
+
+    try {
+      // Simulated AI Generation (TRELLIS Pipeline)
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Simulated GLB result: A high-fidelity building model
+      const modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTextured/glTF-Binary/BoxTextured.glb';
+      
+      const newElement: HallElement = {
+        id: `trellis-${Date.now()}`,
+        type: 'building',
+        x: 600, // Center of 1200 width
+        y: 400, // Center of 800 height
+        rotation: 0,
+        h: 12,
+        modelUrl: modelUrl,
+        label: 'TRELLIS AI Digital Twin',
+        color: '#ffffff'
+      };
+      
+      handleAddElement([newElement]);
+      setSelectedElementIds(new Set([newElement.id])); // Select the new object
+      setIsRightPanelOpen(true); // Open properties panel
+      
+      setStatusMessage({ text: "3B Model başarıyla oluşturuldu ve sahneye eklendi.", type: 'success' });
+    } catch (error) {
+      console.error("Trellis error:", error);
+      setStatusMessage({ text: "3B Model üretimi başarısız oldu.", type: 'error' });
+    } finally {
+      setIsTrellisGenerating(false);
+      setTimeout(() => setStatusMessage(null), 3000);
+    }
+  }, [selectedHall, handleAddElement, selectedCity, updateHall]);
+
   const handleLayoutTabChange = useCallback((tab: 'ai' | 'draw' | 'template' | 'library') => {
     setActiveLayoutTab(tab);
     if (tab === 'template' || tab === 'draw') {
@@ -1748,6 +1810,8 @@ const App: React.FC = () => {
           isGeneratingLayout={isGeneratingLayout}
           isRightPanelOpen={isRightPanelOpen}
           setIsRightPanelOpen={setIsRightPanelOpen}
+          onTrellisUpload={handleTrellisUpload}
+          isTrellisGenerating={isTrellisGenerating}
         />
         <main className="flex-1 overflow-hidden relative flex bg-slate-100">
           <div className="flex-1 overflow-hidden relative flex flex-col items-center bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px]">
