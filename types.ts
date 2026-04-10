@@ -39,6 +39,7 @@ export interface SceneObject {
   scale: [number, number, number];
   color?: string;
   label?: string;
+  modelUrl?: string;
 }
 
 export interface HallElement {
@@ -48,6 +49,10 @@ export interface HallElement {
   y: number;
   points?: { x: number; y: number }[]; // For polygons and roads
   vertices?: [number, number, number][]; // For 3D buildings
+  textureOffset?: { x: number; y: number }; // For texture projection
+  textureScale?: { x: number; y: number }; // For texture projection
+  semanticType?: 'building' | 'tree' | 'car' | 'road' | 'ground'; // For AI analysis
+  confidence?: number; // AI confidence score
   x2?: number; // For dimension-line and sun-angle
   y2?: number; // For dimension-line and sun-angle
   rotation: number;
@@ -70,6 +75,7 @@ export interface HallElement {
   ticketZone?: string; // 'VIP' | 'Standard' | etc.
   legStyle?: 'default' | 'modern' | 'classic';
   zoningType?: 'residential' | 'commercial' | 'green' | 'education' | 'health' | 'industrial' | 'public';
+  modelUrl?: string;
 }
 
 export interface ProtocolSeatingRule {

@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { 
   OrbitControls, 
@@ -7,6 +7,7 @@ import {
   Environment, 
   ContactShadows, 
   useTexture,
+  useGLTF,
   Grid,
   GizmoHelper,
   GizmoViewport,
@@ -15,7 +16,8 @@ import {
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { HallConfig, ReferenceImage, HallElement } from '../types';
-import { Monitor, Move, Box } from 'lucide-react';
+import { Monitor, Move, Box, Sparkles, Loader2, Camera, Sun, BoxSelect } from 'lucide-react';
+import { analyzeSceneWithAI } from '../src/services/geminiService';
 
 interface DrawingCanvasProps {
   hall: HallConfig;
@@ -80,7 +82,8 @@ const Element3DProxy = ({
   workspaceWidth = 1200,
   workspaceHeight = 800,
   realWidth = 40,
-  realHeight = 25
+  realHeight = 25,
+  dronePhotoUrl
 }: { 
   el: HallElement, 
   selectedElementIds: Set<string>,
@@ -90,7 +93,8 @@ const Element3DProxy = ({
   workspaceWidth?: number,
   workspaceHeight?: number,
   realWidth?: number,
-  realHeight?: number
+  realHeight?: number,
+  dronePhotoUrl?: string
 }) => {
   const isSelected = selectedElementIds.has(el.id);
   const transformRef = React.useRef<any>(null);
@@ -145,6 +149,14 @@ const Element3DProxy = ({
   };
 
   const renderGeometry = () => {
+    if (el.modelUrl) {
+      return (
+        <React.Suspense fallback={<mesh><boxGeometry args={[width, actualHeight, depth]} /><meshStandardMaterial color="#ccc" wireframe /></mesh>}>
+          <GLTFModel url={el.modelUrl} height={actualHeight} width={width} depth={depth} />
+        </React.Suspense>
+      );
+    }
+
     if ((el.type === 'polygon' || el.type === 'building') && el.points && el.points.length > 0) {
       return (
         <ExtrudedBuilding 
@@ -157,6 +169,7 @@ const Element3DProxy = ({
           realHeight={realHeight}
           isProxy // Flag to indicate it's part of an element proxy
           isRelative={true} // Traced buildings use relative points from the anchor (el.x, el.y)
+          textureUrl={dronePhotoUrl}
         />
       );
     }
@@ -172,7 +185,12 @@ const Element3DProxy = ({
           }}
         >
           <boxGeometry args={[width, actualHeight, depth]} />
-          <meshStandardMaterial color={color} roughness={0.1} metalness={0.05} />
+          <meshStandardMaterial 
+            color={color} 
+            roughness={0.2} 
+            metalness={0.1} 
+            envMapIntensity={1}
+          />
         </mesh>
         <lineSegments>
           <edgesGeometry args={[new THREE.BoxGeometry(width, actualHeight, depth)]} />
@@ -195,12 +213,15 @@ const Element3DProxy = ({
           showY={false} // Only move on XZ plane
           enabled={true} 
         >
-          {renderGeometry()}
+          <group scale={[el.width ? el.width / 40 : 1, 1, el.height ? el.height / 40 : 1]}>
+            {renderGeometry()}
+          </group>
         </TransformControls>
       ) : (
         <group 
           position={[x3d, 0, y3d]} 
           rotation={[0, -(el.rotation * Math.PI) / 180, 0]}
+          scale={[el.width ? el.width / 40 : 1, 1, el.height ? el.height / 40 : 1]}
         >
           {renderGeometry()}
           {label && (
@@ -249,7 +270,8 @@ const ExtrudedBuilding = ({
   realWidth = 40,
   realHeight = 25,
   isProxy = false,
-  isRelative = false
+  isRelative = false,
+  textureUrl
 }: { 
   points: { x: number, y: number }[], 
   height?: number, 
@@ -260,8 +282,14 @@ const ExtrudedBuilding = ({
   realWidth?: number,
   realHeight?: number,
   isProxy?: boolean,
-  isRelative?: boolean
+  isRelative?: boolean,
+  textureUrl?: string
 }) => {
+  const texture = textureUrl ? useTexture(textureUrl) : null;
+  if (texture) {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  }
+
   const shape = useMemo(() => {
     const s = new THREE.Shape();
     if (points.length === 0) return s;
@@ -275,10 +303,8 @@ const ExtrudedBuilding = ({
         s.lineTo(points[i].x / scaleX, points[i].y / scaleY);
       }
     } else {
-      // Convert points to 3D space (centered)
       const firstPoint = points[0];
       s.moveTo((firstPoint.x - workspaceWidth / 2) / scaleX, (firstPoint.y - workspaceHeight / 2) / scaleY);
-      
       for (let i = 1; i < points.length; i++) {
         s.lineTo((points[i].x - workspaceWidth / 2) / scaleX, (points[i].y - workspaceHeight / 2) / scaleY);
       }
@@ -293,21 +319,40 @@ const ExtrudedBuilding = ({
     bevelEnabled: false,
   }), [height]);
 
+  // Texture Projection Logic
+  const material = useMemo(() => {
+    if (!texture) return new THREE.MeshStandardMaterial({ color: "#f8f8f7", roughness: 0.2, metalness: 0.1 });
+    
+    // Custom material with texture projection
+    return new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.4,
+      metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+  }, [texture]);
+
+  // Update UVs for texture projection (Planar mapping from top)
+  const onUpdateGeometry = useCallback((geometry: THREE.ExtrudeGeometry) => {
+    const pos = geometry.attributes.position;
+    const uvs = geometry.attributes.uv;
+    
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      
+      // Map world XZ to UV 0-1 based on real dimensions
+      uvs.setXY(i, (x / realWidth) + 0.5, (z / realHeight) + 0.5);
+    }
+    uvs.needsUpdate = true;
+  }, [realWidth, realHeight]);
+
   return (
     <group rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
       <mesh castShadow receiveShadow>
-        <extrudeGeometry args={[shape, extrudeSettings]} />
-        <meshStandardMaterial 
-          color="#f8f8f7" // Off-white
-          transparent={opacity < 1} 
-          opacity={opacity} 
-          roughness={0.1} 
-          metalness={0.05}
-          side={THREE.DoubleSide}
-          wireframe={true}
-        />
+        <extrudeGeometry args={[shape, extrudeSettings]} onUpdate={onUpdateGeometry} />
+        <primitive object={material} attach="material" />
       </mesh>
-      {/* Edge Lines for Model Aesthetic */}
       <lineSegments>
         <edgesGeometry args={[new THREE.ExtrudeGeometry(shape, extrudeSettings)]} />
         <lineBasicMaterial color="#475569" linewidth={1} transparent opacity={0.6} />
@@ -317,9 +362,44 @@ const ExtrudedBuilding = ({
 };
 
 /**
+ * GLTFModel: Loads and auto-scales an external 3D asset (e.g., from TRELLIS)
+ */
+const GLTFModel = ({ url, height, width, depth }: { url: string, height: number, width: number, depth: number }) => {
+  const { scene } = useGLTF(url);
+  
+  const scaledScene = useMemo(() => {
+    const clone = scene.clone();
+    const box = new THREE.Box3().setFromObject(clone);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    
+    // Auto-scale to fit the target dimensions (height is priority for buildings)
+    const scaleFactor = height / size.y;
+    clone.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    
+    // Center horizontally and pin bottom to y=0
+    clone.position.set(-center.x * scaleFactor, -box.min.y * scaleFactor, -center.z * scaleFactor);
+    
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        if ((child as THREE.Mesh).material) {
+          ((child as THREE.Mesh).material as THREE.MeshStandardMaterial).envMapIntensity = 1.5;
+        }
+      }
+    });
+    
+    return clone;
+  }, [scene, height]);
+
+  return <primitive object={scaledScene} />;
+};
+
+/**
  * SurroundingEnvironment: Generates the buildings using the new ExtrudeGeometry logic
  */
-const SurroundingEnvironment = ({ workspaceWidth, workspaceHeight, realWidth, realHeight }: { workspaceWidth: number, workspaceHeight: number, realWidth: number, realHeight: number }) => {
+const SurroundingEnvironment = ({ workspaceWidth, workspaceHeight, realWidth, realHeight, dronePhotoUrl }: { workspaceWidth: number, workspaceHeight: number, realWidth: number, realHeight: number, dronePhotoUrl?: string }) => {
   // Simulated Object Detection Data for Ula Kadın Konağı
   const detectedBuildings = useMemo(() => [
     {
@@ -377,6 +457,7 @@ const SurroundingEnvironment = ({ workspaceWidth, workspaceHeight, realWidth, re
           workspaceHeight={workspaceHeight}
           realWidth={realWidth}
           realHeight={realHeight}
+          textureUrl={dronePhotoUrl}
         />
       ))}
     </group>
@@ -399,6 +480,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   // Tracing State
   const [isTracingMode, setIsTracingMode] = React.useState(false);
   const [tracingPoints, setTracingPoints] = React.useState<THREE.Vector3[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+  const [isGenerating3D, setIsGenerating3D] = React.useState(false);
 
   // Calibration and Dimensions
   const realWidth = hall.scaleCalibration?.realDistance || 40;
@@ -470,6 +553,67 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     setTracingPoints([]);
   };
 
+  const handleAIAnalysis = async () => {
+    if (!dronePhotoUrl) return;
+    setIsAnalyzing(true);
+    try {
+      const result = await analyzeSceneWithAI(dronePhotoUrl);
+      if (result.elements && result.elements.length > 0) {
+        const newElements = result.elements.map(el => ({
+          ...el,
+          id: Math.random().toString(36).substr(2, 9),
+          x: el.x || 0,
+          y: el.y || 0,
+          rotation: 0,
+          color: '#f8f8f7'
+        })) as HallElement[];
+        onAddElements?.(newElements);
+      }
+      if (result.sunAngle !== undefined) {
+        // Map 0-360 to 6-20 hours roughly
+        const time = 6 + (result.sunAngle / 360) * 14;
+        setSunTime(time);
+      }
+    } catch (error) {
+      console.error("AI Analysis failed:", error);
+      alert("AI Analizi sırasında bir hata oluştu.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleGenerate3D = async () => {
+    if (!dronePhotoUrl) return;
+    setIsGenerating3D(true);
+    try {
+      // Simulated API call to TRELLIS (Image-to-3D)
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      
+      // Simulated result: A high-fidelity GLB model
+      // Using a sample building model from Khronos
+      const modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTextured/glTF-Binary/BoxTextured.glb';
+      
+      const newBuilding: HallElement = {
+        id: Math.random().toString(36).substr(2, 9),
+        type: 'building',
+        x: workspaceWidth / 2,
+        y: workspaceHeight / 2,
+        modelUrl: modelUrl,
+        h: 8, // 8 meters tall
+        rotation: 0,
+        label: 'TRELLIS AI Building',
+        color: '#ffffff'
+      };
+      
+      onAddElements?.([newBuilding]);
+    } catch (error) {
+      console.error("3D Generation failed:", error);
+      alert("3D Model üretimi sırasında bir hata oluştu.");
+    } finally {
+      setIsGenerating3D(false);
+    }
+  };
+
   return (
     <div className="w-full h-full bg-slate-900 rounded-[40px] overflow-hidden relative border-4 border-slate-800 shadow-inner">
       {/* Reality Capture Workstation Overlays */}
@@ -502,6 +646,32 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
 
           {/* Tracing Controls */}
           <div className="mt-6 pt-6 border-t border-white/5 space-y-3 pointer-events-auto">
+            <button 
+              onClick={handleAIAnalysis}
+              disabled={isAnalyzing || isGenerating3D || !dronePhotoUrl}
+              className={`w-full py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                isAnalyzing 
+                  ? 'bg-slate-800 text-slate-500' 
+                  : 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 hover:bg-indigo-500'
+              }`}
+            >
+              {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {isAnalyzing ? 'Analiz Ediliyor...' : 'AI Sahne Analizi'}
+            </button>
+
+            <button 
+              onClick={handleGenerate3D}
+              disabled={isAnalyzing || isGenerating3D || !dronePhotoUrl}
+              className={`w-full py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                isGenerating3D 
+                  ? 'bg-slate-800 text-slate-500' 
+                  : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500'
+              }`}
+            >
+              {isGenerating3D ? <Loader2 className="w-4 h-4 animate-spin" /> : <BoxSelect className="w-4 h-4" />}
+              {isGenerating3D ? 'Üretiliyor...' : 'TRELLIS 3D Üret (AI)'}
+            </button>
+
             <button 
               onClick={() => {
                 if (isTracingMode) finalizeTracing();
@@ -558,7 +728,12 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
 
       <Canvas 
         shadows 
-        gl={{ antialias: true, preserveDrawingBuffer: true }} 
+        gl={{ 
+          antialias: true, 
+          preserveDrawingBuffer: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          outputColorSpace: THREE.SRGBColorSpace
+        }} 
         onPointerMissed={() => onSelectElements?.(new Set())}
       >
         <PerspectiveCamera makeDefault position={[30, 30, 30]} fov={40} />
@@ -612,6 +787,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
           workspaceHeight={workspaceHeight} 
           realWidth={realWidth} 
           realHeight={realHeight} 
+          dronePhotoUrl={dronePhotoUrl}
         />
 
         <group>
@@ -627,6 +803,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               workspaceHeight={workspaceHeight}
               realWidth={realWidth}
               realHeight={realHeight}
+              dronePhotoUrl={dronePhotoUrl}
             />
           ))}
         </group>
