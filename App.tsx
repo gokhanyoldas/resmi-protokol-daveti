@@ -1636,9 +1636,10 @@ const App: React.FC = () => {
     setIsTrellisGenerating(true);
     setIs3DMode(true); // Switch to 3D mode instantly
     
-    // Find the placeholder element (currently selected one)
+    // Find the placeholder element (currently selected one or labeled 'SAHNE')
     const currentHall = allHallConfigs[selectedHall] || dynamicHalls[selectedHall];
-    const placeholder = (currentHall?.elements || []).find(el => selectedElementIds.has(el.id));
+    const placeholder = (currentHall?.elements || []).find(el => selectedElementIds.has(el.id)) || 
+                        (currentHall?.elements || []).find(el => el.label === 'SAHNE');
     
     const firstFile = files[0];
     const isImage = firstFile.type.startsWith('image/');

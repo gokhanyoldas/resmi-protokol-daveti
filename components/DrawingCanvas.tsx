@@ -27,6 +27,7 @@ interface DrawingCanvasProps {
   onUpdateElements?: (ids: string[], updater: (el: HallElement) => Partial<HallElement>) => void;
   onSelectElements?: (ids: Set<string>) => void;
   onAddElements?: (elements: HallElement[]) => void;
+  onRemoveElements?: (ids: string[]) => void;
   pendingModel?: any;
   onModelPlaced?: (x: number, y: number) => void;
 }
@@ -490,6 +491,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   onUpdateElements,
   onSelectElements,
   onAddElements,
+  onRemoveElements,
   pendingModel,
   onModelPlaced
 }) => {
@@ -523,13 +525,18 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         const downloadUrl = await getSketchfabDownloadUrl(uid, token.trim());
         
         if (downloadUrl && onAddElements) {
+          // Find if there's a 'SAHNE' placeholder to replace
+          const sahnePlaceholder = (hall.elements || []).find(el => el.label === 'SAHNE');
+          
           const newElement: HallElement = {
             id: `sketchfab-${uid}-${Date.now()}`,
             type: 'building',
-            x: 600, // Center
-            y: 400, // Center
-            rotation: 0,
-            h: 2,
+            x: sahnePlaceholder?.x || 600, // Use placeholder x or center
+            y: sahnePlaceholder?.y || 400, // Use placeholder y or center
+            width: sahnePlaceholder?.width || 200,
+            height: sahnePlaceholder?.height || 200,
+            rotation: sahnePlaceholder?.rotation || 0,
+            h: sahnePlaceholder?.h || 2,
             modelUrl: downloadUrl,
             label: name || 'Sketchfab Model',
             color: '#ffffff',
@@ -539,6 +546,12 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               license: license
             }
           };
+
+          // If placeholder found, remove it
+          if (sahnePlaceholder && onRemoveElements) {
+            onRemoveElements([sahnePlaceholder.id]);
+          }
+
           onAddElements([newElement]);
           onSelectElements?.(new Set([newElement.id]));
         }
@@ -558,7 +571,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
 
     window.addEventListener('add-3d-object', handleAdd3DObject);
     return () => window.removeEventListener('add-3d-object', handleAdd3DObject);
-  }, [onAddElements, onSelectElements]);
+  }, [onAddElements, onSelectElements, onRemoveElements, hall.elements]);
 
   // Calibration and Dimensions
   const realWidth = hall.scaleCalibration?.realDistance || 40;

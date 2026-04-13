@@ -1700,6 +1700,7 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
                 });
               }
             }}
+            onRemoveElements={handleRemoveElements}
             pendingModel={pendingModel}
             onModelPlaced={onModelPlaced}
           />
