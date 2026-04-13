@@ -136,12 +136,27 @@ const ObjectLibrary: React.FC<ObjectLibraryProps> = ({ onAddObject }) => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
                     <button
-                      onClick={() => onAddObject({
-                        uid: model.uid,
-                        name: model.name,
-                        creator: model.user.displayName || model.user.username,
-                        license: model.license.label
-                      })}
+                      onClick={() => {
+                        const modelData = {
+                          uid: model.uid,
+                          name: model.name,
+                          creator: model.user.displayName || model.user.username,
+                          license: model.license.label
+                        };
+                        
+                        // Call the prop if provided
+                        onAddObject(modelData);
+                        
+                        // Dispatch custom event for DrawingCanvas
+                        window.dispatchEvent(new CustomEvent('add-3d-object', { 
+                          detail: { 
+                            modelUid: modelData.uid,
+                            name: modelData.name,
+                            creator: modelData.creator,
+                            license: modelData.license
+                          } 
+                        }));
+                      }}
                       className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
                     >
                       <Download className="w-3.5 h-3.5" /> Sahneye Ekle

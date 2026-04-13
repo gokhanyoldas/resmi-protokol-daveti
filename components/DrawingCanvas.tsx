@@ -515,8 +515,12 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       setIsSketchfabLoading(true);
       setSketchfabError(null);
       try {
-        const token = import.meta.env.VITE_SKETCHFAB_API_TOKEN;
-        const downloadUrl = await getSketchfabDownloadUrl(modelUid, token);
+        // Robust token retrieval (same as ObjectLibrary)
+        const token = import.meta.env.VITE_SKETCHFAB_API_TOKEN || 
+                      (window as any).process?.env?.VITE_SKETCHFAB_API_TOKEN || 
+                      '';
+        
+        const downloadUrl = await getSketchfabDownloadUrl(modelUid, token.trim());
         
         if (downloadUrl && onAddElements) {
           const newElement: HallElement = {
@@ -540,7 +544,12 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         }
       } catch (error: any) {
         console.error('Error adding Sketchfab object:', error);
-        setSketchfabError(error.message || 'Model yüklenirken bir hata oluştu.');
+        // Special handling for 403 (Forbidden/Paid models)
+        if (error.message?.includes('403') || error.message?.includes('ücretli')) {
+          setSketchfabError('Bu model ücretli olabilir veya indirme izni bulunmuyor.');
+        } else {
+          setSketchfabError(error.message || 'Model yüklenirken bir hata oluştu.');
+        }
         setTimeout(() => setSketchfabError(null), 5000);
       } finally {
         setIsSketchfabLoading(false);
