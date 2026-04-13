@@ -76,6 +76,12 @@ export interface HallElement {
   legStyle?: 'default' | 'modern' | 'classic';
   zoningType?: 'residential' | 'commercial' | 'green' | 'education' | 'health' | 'industrial' | 'public';
   modelUrl?: string;
+  metadata?: {
+    creator?: string;
+    license?: string;
+    source?: string;
+    originalType?: string;
+  };
 }
 
 export interface ProtocolSeatingRule {

@@ -55,6 +55,8 @@ interface SeatingPlanProps {
   onFileChange?: (file: File | null) => void;
   referenceImages?: ReferenceImage[];
   onUpdateReferenceImage?: (id: string, updates: Partial<ReferenceImage>) => void;
+  pendingModel?: any;
+  onModelPlaced?: (x: number, y: number) => void;
 }
 
 // 3D Scene Components
@@ -490,7 +492,9 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
   onToggle3DMode,
   onFileChange,
   referenceImages = [],
-  onUpdateReferenceImage
+  onUpdateReferenceImage,
+  pendingModel,
+  onModelPlaced
 }) => {
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -1696,6 +1700,8 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
                 });
               }
             }}
+            pendingModel={pendingModel}
+            onModelPlaced={onModelPlaced}
           />
           
           <button 

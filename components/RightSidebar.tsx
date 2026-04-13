@@ -6,7 +6,7 @@ import {
   Maximize2, Move, RotateCw, Type, Layers, Settings2, Ruler, Trash2,
   Circle, Square, Monitor, MapPin, Database, Plus, Minus, Users,
   ChevronDown, Sparkles, RefreshCw, XCircle, Image as ImageIcon, Edit2, CheckCircle2,
-  Palette, Hexagon, Sun, Eye, EyeOff, Lock, Unlock, Box, Upload
+  Palette, Hexagon, Sun, Eye, EyeOff, Lock, Unlock, Box, Upload, User, ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { HallConfig, HallElement, ReferenceImage } from '../types';
@@ -539,16 +539,41 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                             <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-2">
                               <div className="flex items-center gap-2">
                                 <Database className="w-3.5 h-3.5 text-indigo-500" />
-                                <span className="text-[9px] font-black text-indigo-700 uppercase tracking-widest">AI Model Kaynağı</span>
+                                <span className="text-[9px] font-black text-indigo-700 uppercase tracking-widest">
+                                  {firstElement.metadata?.source === 'Sketchfab' ? 'Sketchfab Model Bilgisi' : 'AI Model Kaynağı'}
+                                </span>
                               </div>
-                              <div className="p-2 bg-white rounded-lg border border-indigo-100 overflow-hidden">
-                                <p className="text-[8px] font-mono text-indigo-400 break-all truncate">
-                                  {firstElement.modelUrl}
-                                </p>
-                              </div>
-                              <p className="text-[9px] text-indigo-400 font-bold italic">
-                                * TRELLIS AI tarafından üretilen yüksek sadakatli 3B model.
-                              </p>
+                              
+                              {firstElement.metadata?.source === 'Sketchfab' ? (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <User className="w-3 h-3 text-indigo-400" />
+                                    <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-tighter truncate">
+                                      {firstElement.metadata.creator}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter">
+                                      {firstElement.metadata.license}
+                                    </span>
+                                  </div>
+                                  <p className="text-[8px] text-indigo-400 font-bold italic leading-tight">
+                                    * Bu model Sketchfab üzerinden dinamik olarak yüklenmiştir. Lisans kurallarına uyunuz.
+                                  </p>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="p-2 bg-white rounded-lg border border-indigo-100 overflow-hidden">
+                                    <p className="text-[8px] font-mono text-indigo-400 break-all truncate">
+                                      {firstElement.modelUrl}
+                                    </p>
+                                  </div>
+                                  <p className="text-[9px] text-indigo-400 font-bold italic">
+                                    * TRELLIS AI tarafından üretilen yüksek sadakatli 3B model.
+                                  </p>
+                                </>
+                              )}
                             </div>
                           )}
 

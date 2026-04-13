@@ -15,6 +15,8 @@ import TelegramPreview from './components/TelegramPreview';
 import HallAnalysisPanel from './components/HallAnalysisPanel';
 import { AnimatePresence } from 'motion/react';
 
+import { getSketchfabDownloadUrl } from './src/services/sketchfabService';
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://qorygwdwirbtqewhubze.supabase.co';
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvcnlnd2R3aXJidHFld2h1YnplIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDYyOTU1OCwiZXhwIjoyMDgwMjA1NTU4fQ.oeReAMn8O533IcPcDSg1QfzYTden72SyK677etV9ZaM';
 const TELEGRAM_BOT_TOKEN = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || '8559688926:AAH832uoO8JfSMIt6YdUhxc19NBFh090I7M';
@@ -54,6 +56,8 @@ const App: React.FC = () => {
   const [is3DMode, setIs3DMode] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isTrellisGenerating, setIsTrellisGenerating] = useState(false);
+  const [isSketchfabLoading, setIsSketchfabLoading] = useState(false);
+  const [pendingSketchfabModel, setPendingSketchfabModel] = useState<{ uid: string, name: string, creator: string, license: string, downloadUrl: string } | null>(null);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -1632,6 +1636,10 @@ const App: React.FC = () => {
     setIsTrellisGenerating(true);
     setIs3DMode(true); // Switch to 3D mode instantly
     
+    // Find the placeholder element (currently selected one)
+    const currentHall = allHallConfigs[selectedHall] || dynamicHalls[selectedHall];
+    const placeholder = (currentHall?.elements || []).find(el => selectedElementIds.has(el.id));
+    
     const firstFile = files[0];
     const isImage = firstFile.type.startsWith('image/');
     
@@ -1639,11 +1647,11 @@ const App: React.FC = () => {
       const url = URL.createObjectURL(firstFile);
       // Set as background image for the current hall
       setDynamicHalls(prev => {
-        const currentHall = prev[selectedHall] || allHallConfigs[selectedHall];
-        if (!currentHall) return prev;
+        const hall = prev[selectedHall] || allHallConfigs[selectedHall];
+        if (!hall) return prev;
         
         const updatedHall: HallConfig = {
-          ...currentHall,
+          ...hall,
           backgroundImage: url
         };
 
@@ -1664,18 +1672,40 @@ const App: React.FC = () => {
       const newElement: HallElement = {
         id: `trellis-${Date.now()}`,
         type: 'building',
-        x: 600, // Center of 1200 width
-        y: 400, // Center of 800 height
-        rotation: 0,
-        h: 12,
+        x: placeholder?.x || 600,
+        y: placeholder?.y || 400,
+        width: placeholder?.width || 200,
+        height: placeholder?.height || 200,
+        rotation: placeholder?.rotation || 0,
+        h: placeholder?.h || 12,
         modelUrl: modelUrl,
         label: 'TRELLIS AI Digital Twin',
-        color: '#ffffff'
+        color: '#ffffff',
+        metadata: {
+          source: 'TRELLIS AI',
+          originalType: placeholder?.type
+        }
       };
       
-      handleAddElement([newElement]);
-      setSelectedElementIds(new Set([newElement.id])); // Select the new object
-      setIsRightPanelOpen(true); // Open properties panel
+      // 1. Auto-cleanup & 2. Add the new 3D model (Atomic update to avoid race conditions)
+      if (currentHall) {
+        let newElements = [...(currentHall.elements || [])];
+        
+        // Remove placeholder if it exists
+        if (placeholder) {
+          newElements = newElements.filter(el => el.id !== placeholder.id);
+        }
+        
+        // Add the newly generated 3D model
+        newElements.push(newElement);
+        
+        // Update the hall configuration
+        updateHall({ ...currentHall, elements: newElements });
+        
+        // 3. Focus Shift: Select the new object
+        setSelectedElementIds(new Set([newElement.id]));
+        setIsRightPanelOpen(true); // Open properties panel
+      }
       
       setStatusMessage({ text: "3B Model başarıyla oluşturuldu ve sahneye eklendi.", type: 'success' });
     } catch (error) {
@@ -1685,7 +1715,41 @@ const App: React.FC = () => {
       setIsTrellisGenerating(false);
       setTimeout(() => setStatusMessage(null), 3000);
     }
-  }, [selectedHall, handleAddElement, selectedCity, updateHall]);
+  }, [selectedHall, handleAddElement, selectedCity, updateHall, selectedElementIds, allHallConfigs, dynamicHalls, handleRemoveElements]);
+
+  const handleSelectSketchfabModel = useCallback((model: { uid: string, name: string, creator: string, license: string }) => {
+    // Logic moved to DrawingCanvas via CustomEvent 'add-3d-object'
+    // We just ensure 3D mode is active
+    setIs3DMode(true);
+  }, []);
+
+  const handleModelPlaced = useCallback((x: number, y: number) => {
+    if (!pendingSketchfabModel) return;
+
+    const newElement: HallElement = {
+      id: `sketchfab-${pendingSketchfabModel.uid}-${Date.now()}`,
+      type: 'building',
+      x,
+      y,
+      rotation: 0,
+      h: 2,
+      modelUrl: pendingSketchfabModel.downloadUrl,
+      label: pendingSketchfabModel.name,
+      color: '#ffffff',
+      metadata: {
+        creator: pendingSketchfabModel.creator,
+        license: pendingSketchfabModel.license,
+        source: 'Sketchfab'
+      }
+    };
+
+    handleAddElement([newElement]);
+    setSelectedElementIds(new Set([newElement.id]));
+    setPendingSketchfabModel(null);
+    setIsRightPanelOpen(true);
+    setStatusMessage({ text: "Model başarıyla yerleştirildi.", type: 'success' });
+    setTimeout(() => setStatusMessage(null), 3000);
+  }, [pendingSketchfabModel, handleAddElement]);
 
   const handleLayoutTabChange = useCallback((tab: 'ai' | 'draw' | 'template' | 'library') => {
     setActiveLayoutTab(tab);
@@ -1812,6 +1876,7 @@ const App: React.FC = () => {
           setIsRightPanelOpen={setIsRightPanelOpen}
           onTrellisUpload={handleTrellisUpload}
           isTrellisGenerating={isTrellisGenerating}
+          onSelectSketchfabModel={handleSelectSketchfabModel}
         />
         <main className="flex-1 overflow-hidden relative flex bg-slate-100">
           <div className="flex-1 overflow-hidden relative flex flex-col items-center bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px]">
@@ -1976,6 +2041,8 @@ const App: React.FC = () => {
                         onFileChange={setInvitationFile}
                         referenceImages={referenceImages}
                         onUpdateReferenceImage={handleUpdateReferenceImage}
+                        pendingModel={pendingSketchfabModel}
+                        onModelPlaced={handleModelPlaced}
                       />
                   </div>
                 ) : (

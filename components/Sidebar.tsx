@@ -1,9 +1,11 @@
-import ObjectLibrary from './ObjectLibrary';
+
 import React, { useRef, useMemo, useState } from 'react';
 import { Search, CheckSquare, Square, Heart, Send, CheckCircle2, XCircle, Clock, MessageSquare, Trash2, Upload, X, AlertTriangle, Printer, Tag, RefreshCw, ChevronDown, ChevronUp, MapPin, Database, Layout, Users, Sparkles, Edit2, Check, Plus, Minus, Smartphone, Image as ImageIcon, Grid, Monitor, Coffee, UserCheck, Square as SquareIcon, Circle, Layers, Box, Settings2, Undo2, Redo2, LayoutGrid, Type, Menu, AlignLeft, AlignStartVertical, AlignCenter, AlignJustify, AlignEndVertical, RotateCw, Copy, ArrowUp, ArrowDown, Zap, UserPlus, Loader2 } from 'lucide-react';
 import { ProtocolPerson, HallKey, HallConfig, HallElement } from '../types';
 import { TURKEY_CITIES, CITY_HALLS, HALL_CONFIGS } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
+
+import ObjectLibrary from './ObjectLibrary';
 
 interface SidebarProps {
   data: ProtocolPerson[];
@@ -83,6 +85,7 @@ interface SidebarProps {
   setIsRightPanelOpen?: (val: boolean) => void;
   onTrellisUpload?: (files: File[]) => void;
   isTrellisGenerating?: boolean;
+  onSelectSketchfabModel?: (model: { uid: string, name: string, creator: string, license: string }) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -125,7 +128,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   isRightPanelOpen,
   setIsRightPanelOpen,
   onTrellisUpload,
-  isTrellisGenerating
+  isTrellisGenerating,
+  onSelectSketchfabModel
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const trellisInputRef = useRef<HTMLInputElement>(null);
@@ -553,6 +557,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 AI üretimi sonrası modelleri sağ paneldeki araçlarla inceleyebilir veya manuel düzenlemeler yapabilirsiniz.
                               </p>
                             </div>
+
+                            <div className="pt-4 border-t border-slate-200">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">3B Nesne Kütüphanesi</label>
+                              <div className="h-[400px]">
+                                <ObjectLibrary onAddObject={(model) => {
+                                  window.dispatchEvent(new CustomEvent('add-3d-object', { 
+                                    detail: { modelUid: model.uid } 
+                                  }));
+                                  onSelectSketchfabModel?.(model);
+                                }} />
+                              </div>
+                            </div>
                           </div>
                         )}
                         {activeLayoutTab === 'template' && (
@@ -611,15 +627,17 @@ const Sidebar: React.FC<SidebarProps> = ({
                           </div>
                         )}
                         {activeLayoutTab === 'library' && (
-                          <div className="space-y-3">
-                            <button 
-                              className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[13px] font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-95 shadow-sm"
-                            >
-                              <Database className="w-5 h-5 text-blue-500" /> Ortak Kütüphane
-                            </button>
-                            <p className="text-[11px] text-slate-400 font-bold text-center uppercase tracking-tighter">
-                              Diğer kullanıcıların paylaştığı salon şablonlarını kullanın
-                            </p>
+                          <div className="h-[calc(100vh-400px)]">
+                            <ObjectLibrary onAddObject={(model) => {
+                              window.dispatchEvent(new CustomEvent('add-3d-object', { 
+                                detail: { 
+                                  modelUid: model.uid,
+                                  name: model.name,
+                                  creator: model.creator,
+                                  license: model.license
+                                } 
+                              }));
+                            }} />
                           </div>
                         )}
                         {activeLayoutTab === 'layers' && (

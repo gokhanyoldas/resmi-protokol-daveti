@@ -1,5 +1,5 @@
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { 
   OrbitControls, 
@@ -16,8 +16,9 @@ import {
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { HallConfig, ReferenceImage, HallElement } from '../types';
-import { Monitor, Move, Box, Sparkles, Loader2, Camera, Sun, BoxSelect } from 'lucide-react';
+import { Monitor, Move, Box, Sparkles, Loader2, Camera, Sun, BoxSelect, RotateCw, Maximize2 } from 'lucide-react';
 import { analyzeSceneWithAI } from '../src/services/geminiService';
+import { getSketchfabDownloadUrl } from '../src/services/sketchfabService';
 
 interface DrawingCanvasProps {
   hall: HallConfig;
@@ -26,6 +27,8 @@ interface DrawingCanvasProps {
   onUpdateElements?: (ids: string[], updater: (el: HallElement) => Partial<HallElement>) => void;
   onSelectElements?: (ids: Set<string>) => void;
   onAddElements?: (elements: HallElement[]) => void;
+  pendingModel?: any;
+  onModelPlaced?: (x: number, y: number) => void;
 }
 
 /**
@@ -79,6 +82,7 @@ const Element3DProxy = ({
   onUpdateElements,
   onSelectElements,
   onDraggingChange,
+  transformMode = 'translate',
   workspaceWidth = 1200,
   workspaceHeight = 800,
   realWidth = 40,
@@ -90,6 +94,7 @@ const Element3DProxy = ({
   onUpdateElements?: (ids: string[], updater: (el: HallElement) => Partial<HallElement>) => void,
   onSelectElements?: (ids: Set<string>) => void,
   onDraggingChange?: (dragging: boolean) => void,
+  transformMode?: 'translate' | 'rotate' | 'scale',
   workspaceWidth?: number,
   workspaceHeight?: number,
   realWidth?: number,
@@ -207,10 +212,10 @@ const Element3DProxy = ({
           ref={transformRef}
           position={[x3d, 0, y3d]} 
           rotation={[0, -(el.rotation * Math.PI) / 180, 0]}
-          mode="translate" 
+          mode={transformMode} 
           onMouseDown={handleDragStart}
           onMouseUp={handleDragEnd}
-          showY={false} // Only move on XZ plane
+          showY={transformMode === 'translate' ? false : true} 
           enabled={true} 
         >
           <group scale={[el.width ? el.width / 40 : 1, 1, el.height ? el.height / 40 : 1]}>
@@ -364,7 +369,7 @@ const ExtrudedBuilding = ({
 /**
  * GLTFModel: Loads and auto-scales an external 3D asset (e.g., from TRELLIS)
  */
-const GLTFModel = ({ url, height, width, depth }: { url: string, height: number, width: number, depth: number }) => {
+const GLTFModel = ({ url, height, width, depth, useMockupMaterial = false }: { url: string, height: number, width: number, depth: number, useMockupMaterial?: boolean }) => {
   const { scene } = useGLTF(url);
   
   const scaledScene = useMemo(() => {
@@ -373,25 +378,39 @@ const GLTFModel = ({ url, height, width, depth }: { url: string, height: number,
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     
-    // Auto-scale to fit the target dimensions (height is priority for buildings)
-    const scaleFactor = height / size.y;
-    clone.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    // Scale to fit the target dimensions
+    // X -> width, Y -> height (h), Z -> depth (height in 2D)
+    const scaleX = width / (size.x || 1);
+    const scaleY = height / (size.y || 1);
+    const scaleZ = depth / (size.z || 1);
+    
+    clone.scale.set(scaleX, scaleY, scaleZ);
     
     // Center horizontally and pin bottom to y=0
-    clone.position.set(-center.x * scaleFactor, -box.min.y * scaleFactor, -center.z * scaleFactor);
+    clone.position.set(-center.x * scaleX, -box.min.y * scaleY, -center.z * scaleZ);
     
+    const mockupMaterial = new THREE.MeshStandardMaterial({
+      color: '#f8f8f7',
+      roughness: 0.2,
+      metalness: 0.1,
+      envMapIntensity: 1
+    });
+
     clone.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-        if ((child as THREE.Mesh).material) {
+        
+        if (useMockupMaterial) {
+          (child as THREE.Mesh).material = mockupMaterial;
+        } else if ((child as THREE.Mesh).material) {
           ((child as THREE.Mesh).material as THREE.MeshStandardMaterial).envMapIntensity = 1.5;
         }
       }
     });
     
     return clone;
-  }, [scene, height]);
+  }, [scene, height, width, depth, useMockupMaterial]);
 
   return <primitive object={scaledScene} />;
 };
@@ -470,7 +489,9 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   selectedElementIds,
   onUpdateElements,
   onSelectElements,
-  onAddElements
+  onAddElements,
+  pendingModel,
+  onModelPlaced
 }) => {
   const dronePhotoUrl = hall.backgroundImage;
   const [isDragging, setIsDragging] = React.useState(false);
@@ -482,6 +503,53 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const [tracingPoints, setTracingPoints] = React.useState<THREE.Vector3[]>([]);
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
   const [isGenerating3D, setIsGenerating3D] = React.useState(false);
+  const [isSketchfabLoading, setIsSketchfabLoading] = React.useState(false);
+  const [sketchfabError, setSketchfabError] = React.useState<string | null>(null);
+  const [transformMode, setTransformMode] = React.useState<'translate' | 'rotate' | 'scale'>('translate');
+
+  useEffect(() => {
+    const handleAdd3DObject = async (e: any) => {
+      const { modelUid, name, creator, license } = e.detail;
+      if (!modelUid) return;
+
+      setIsSketchfabLoading(true);
+      setSketchfabError(null);
+      try {
+        const token = import.meta.env.VITE_SKETCHFAB_API_TOKEN;
+        const downloadUrl = await getSketchfabDownloadUrl(modelUid, token);
+        
+        if (downloadUrl && onAddElements) {
+          const newElement: HallElement = {
+            id: `sketchfab-${modelUid}-${Date.now()}`,
+            type: 'building',
+            x: 600, // Center
+            y: 400, // Center
+            rotation: 0,
+            h: 2,
+            modelUrl: downloadUrl,
+            label: name || 'Sketchfab Model',
+            color: '#ffffff',
+            metadata: {
+              source: 'Sketchfab',
+              creator: creator,
+              license: license
+            }
+          };
+          onAddElements([newElement]);
+          onSelectElements?.(new Set([newElement.id]));
+        }
+      } catch (error: any) {
+        console.error('Error adding Sketchfab object:', error);
+        setSketchfabError(error.message || 'Model yüklenirken bir hata oluştu.');
+        setTimeout(() => setSketchfabError(null), 5000);
+      } finally {
+        setIsSketchfabLoading(false);
+      }
+    };
+
+    window.addEventListener('add-3d-object', handleAdd3DObject);
+    return () => window.removeEventListener('add-3d-object', handleAdd3DObject);
+  }, [onAddElements, onSelectElements]);
 
   // Calibration and Dimensions
   const realWidth = hall.scaleCalibration?.realDistance || 40;
@@ -502,6 +570,17 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   }, [selectedElementIds]);
 
   const handleGroundClick = (e: any) => {
+    if (pendingModel && e.point) {
+      e.stopPropagation();
+      // Convert 3D point back to 2D workspace coordinates
+      // 3D point is in meters, workspace is in pixels
+      const x2d = e.point.x * scaleX + workspaceWidth / 2;
+      const y2d = e.point.z * scaleY + workspaceHeight / 2;
+      
+      onModelPlaced?.(x2d, y2d);
+      return;
+    }
+
     if (!isTracingMode) return;
     e.stopPropagation();
     
@@ -724,6 +803,43 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
             <span className="text-[8px] font-black text-slate-500 uppercase tracking-tighter">Günbatımı</span>
           </div>
         </div>
+
+        {/* Transform Mode Switcher */}
+        {selectedElementIds.size > 0 && (
+          <div className="bg-slate-900/90 backdrop-blur-2xl p-2 rounded-2xl border border-white/10 shadow-2xl flex gap-1 pointer-events-auto">
+            <button 
+              onClick={() => setTransformMode('translate')}
+              className={`p-2 rounded-xl transition-all ${transformMode === 'translate' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+              title="Taşı (T)"
+            >
+              <Move className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setTransformMode('rotate')}
+              className={`p-2 rounded-xl transition-all ${transformMode === 'rotate' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+              title="Döndür (R)"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setTransformMode('scale')}
+              className={`p-2 rounded-xl transition-all ${transformMode === 'scale' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}
+              title="Ölçeklendir (S)"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Sketchfab Status Feedback */}
+        {(isSketchfabLoading || sketchfabError) && (
+          <div className={`bg-slate-900/90 backdrop-blur-2xl px-6 py-3 rounded-2xl border shadow-2xl flex items-center gap-3 animate-in slide-in-from-top pointer-events-auto ${sketchfabError ? 'border-red-500/50 text-red-400' : 'border-blue-500/50 text-blue-400'}`}>
+            {isSketchfabLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Box className="w-4 h-4" />}
+            <span className="text-[10px] font-black uppercase tracking-widest">
+              {isSketchfabLoading ? 'Sketchfab Modeli İndiriliyor...' : sketchfabError}
+            </span>
+          </div>
+        )}
       </div>
 
       <Canvas 
@@ -799,6 +915,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               onUpdateElements={onUpdateElements}
               onSelectElements={onSelectElements}
               onDraggingChange={setIsDragging}
+              transformMode={transformMode}
               workspaceWidth={workspaceWidth}
               workspaceHeight={workspaceHeight}
               realWidth={realWidth}
