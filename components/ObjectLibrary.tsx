@@ -150,7 +150,7 @@ const ObjectLibrary: React.FC<ObjectLibraryProps> = ({ onAddObject }) => {
                         // Dispatch custom event for DrawingCanvas
                         window.dispatchEvent(new CustomEvent('add-3d-object', { 
                           detail: { 
-                            modelUid: modelData.uid,
+                            uid: modelData.uid,
                             name: modelData.name,
                             creator: modelData.creator,
                             license: modelData.license

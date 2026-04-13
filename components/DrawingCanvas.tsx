@@ -509,8 +509,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
 
   useEffect(() => {
     const handleAdd3DObject = async (e: any) => {
-      const { modelUid, name, creator, license } = e.detail;
-      if (!modelUid) return;
+      const { uid, name, creator, license } = e.detail;
+      if (!uid) return;
 
       setIsSketchfabLoading(true);
       setSketchfabError(null);
@@ -520,11 +520,11 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
                       (window as any).process?.env?.VITE_SKETCHFAB_API_TOKEN || 
                       '';
         
-        const downloadUrl = await getSketchfabDownloadUrl(modelUid, token.trim());
+        const downloadUrl = await getSketchfabDownloadUrl(uid, token.trim());
         
         if (downloadUrl && onAddElements) {
           const newElement: HallElement = {
-            id: `sketchfab-${modelUid}-${Date.now()}`,
+            id: `sketchfab-${uid}-${Date.now()}`,
             type: 'building',
             x: 600, // Center
             y: 400, // Center
