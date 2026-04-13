@@ -517,10 +517,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       setIsSketchfabLoading(true);
       setSketchfabError(null);
       try {
-        // Robust token retrieval (same as ObjectLibrary)
-        const token = import.meta.env.VITE_SKETCHFAB_API_TOKEN || 
-                      (window as any).process?.env?.VITE_SKETCHFAB_API_TOKEN || 
-                      '';
+        // Manually embedded token for guaranteed connection
+        const token = "9c200c906b9e4f49a7b615c107667873";
         
         const downloadUrl = await getSketchfabDownloadUrl(uid, token.trim());
         
@@ -569,8 +567,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       }
     };
 
-    window.addEventListener('add-3d-object', handleAdd3DObject);
-    return () => window.removeEventListener('add-3d-object', handleAdd3DObject);
+    window.addEventListener('add-3d-model', handleAdd3DObject);
+    return () => window.removeEventListener('add-3d-model', handleAdd3DObject);
   }, [onAddElements, onSelectElements, onRemoveElements, hall.elements]);
 
   // Calibration and Dimensions

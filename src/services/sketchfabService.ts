@@ -20,8 +20,11 @@ export const searchSketchfabModels = async (query: string, token?: string) => {
   );
   
   if (!response.ok) {
-    if (response.status === 401) throw new Error('Sketchfab API anahtarı geçersiz');
-    throw new Error('Sketchfab arama başarısız oldu');
+    console.error(`Sketchfab Search Error: Status ${response.status}`, response.statusText);
+    if (response.status === 401) throw new Error('Sketchfab API anahtarı geçersiz (401)');
+    if (response.status === 403) throw new Error('Sketchfab erişimi engellendi (403)');
+    if (response.status === 404) throw new Error('Sketchfab servisi bulunamadı (404)');
+    throw new Error(`Sketchfab arama başarısız oldu (Hata: ${response.status})`);
   }
   return response.json();
 };

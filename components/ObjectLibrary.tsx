@@ -9,9 +9,8 @@ import { searchSketchfabModels } from '../src/services/sketchfabService';
 
 // Robust token retrieval
 const getSketchfabToken = () => {
-  const token = import.meta.env.VITE_SKETCHFAB_API_TOKEN || 
-                (window as any).process?.env?.VITE_SKETCHFAB_API_TOKEN || 
-                '';
+  // Manually embedded token for guaranteed connection
+  const token = "9c200c906b9e4f49a7b615c107667873";
   return token.trim();
 };
 
@@ -53,8 +52,7 @@ const ObjectLibrary: React.FC<ObjectLibraryProps> = ({ onAddObject }) => {
     console.log("Sistemde bulunan Token:", SKETCHFAB_TOKEN ? "Mevcut" : "Eksik");
     
     if (!SKETCHFAB_TOKEN) {
-      console.error('Hata: API Token bulunamadı. Lütfen çevre değişkenlerini kontrol edin (VITE_SKETCHFAB_API_TOKEN).');
-      setError('Sketchfab API anahtarı eksik. Lütfen ayarlardan ekleyin.');
+      console.error('Hata: API Token bulunamadı.');
       return;
     }
 
@@ -148,7 +146,7 @@ const ObjectLibrary: React.FC<ObjectLibraryProps> = ({ onAddObject }) => {
                         onAddObject(modelData);
                         
                         // Dispatch custom event for DrawingCanvas
-                        window.dispatchEvent(new CustomEvent('add-3d-object', { 
+                        window.dispatchEvent(new CustomEvent('add-3d-model', { 
                           detail: { 
                             uid: modelData.uid,
                             name: modelData.name,
