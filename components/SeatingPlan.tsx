@@ -57,6 +57,7 @@ interface SeatingPlanProps {
   onUpdateReferenceImage?: (id: string, updates: Partial<ReferenceImage>) => void;
   pendingModel?: any;
   onModelPlaced?: (x: number, y: number) => void;
+  cameraSettings?: any;
 }
 
 // 3D Scene Components
@@ -397,7 +398,11 @@ const EventObject3D = ({ el, selectedElementIds }: { el: HallElement, selectedEl
   return <Element3D el={el} selectedElementIds={selectedElementIds} />;
 };
 
-const DigitalTwinWorkstation = ({ hall, referenceImages, selectedElementIds }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string> }) => {
+const Scene3D = ({ hall, referenceImages, selectedElementIds, cameraSettings }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string>, cameraSettings?: any }) => {
+  return <DigitalTwinWorkstation hall={hall} referenceImages={referenceImages} selectedElementIds={selectedElementIds} cameraSettings={cameraSettings} />;
+};
+
+const DigitalTwinWorkstation = ({ hall, referenceImages, selectedElementIds, cameraSettings }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string>, cameraSettings?: any }) => {
   // Computer Vision Simulation: Extracting numerical data from calibration
   const sceneSchema = useMemo(() => {
     const scaleFactor = hall.scaleCalibration?.pixelDistance || 1;
@@ -428,7 +433,11 @@ const DigitalTwinWorkstation = ({ hall, referenceImages, selectedElementIds }: {
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={[400, 400, 400]} fov={30} />
+      <PerspectiveCamera 
+        makeDefault 
+        position={[400, cameraSettings?.height * 40 || 400, 400]} 
+        fov={cameraSettings?.fov || 30} 
+      />
       <OrbitControls 
         makeDefault 
         minPolarAngle={Math.PI / 6} 
@@ -437,6 +446,7 @@ const DigitalTwinWorkstation = ({ hall, referenceImages, selectedElementIds }: {
         dampingFactor={0.05}
         minDistance={50}
         maxDistance={1200}
+        target={cameraSettings?.target || [0, 0, 0]}
       />
       
       <Environment preset="studio" />
@@ -472,10 +482,6 @@ const DigitalTwinWorkstation = ({ hall, referenceImages, selectedElementIds }: {
       </GizmoHelper>
     </>
   );
-};
-
-const Scene3D = ({ hall, referenceImages, selectedElementIds }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string> }) => {
-  return <DigitalTwinWorkstation hall={hall} referenceImages={referenceImages} selectedElementIds={selectedElementIds} />;
 };
 
 const SeatingPlan: React.FC<SeatingPlanProps> = ({ 

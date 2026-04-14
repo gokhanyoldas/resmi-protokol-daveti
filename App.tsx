@@ -1,7 +1,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Users, Printer, ZoomIn, ZoomOut, Database, RefreshCw, MessageSquare, AlertCircle, Loader2, CheckCircle2, XCircle, Clock, Send, ChevronDown, MapPin, Tag, Layout, Sparkles, Edit2, AlertTriangle, Search, Upload, Plus, Trash2, Undo2, RotateCw, Copy, ArrowUp, ArrowDown, Group, Ungroup, AlignLeft, AlignRight, AlignStartVertical, AlignEndVertical, AlignCenter, AlignJustify, Minus, LayoutGrid, Ruler, Maximize2, Redo2, Settings2, Type, RotateCcw, Zap } from 'lucide-react';
+import { Users, Printer, ZoomIn, ZoomOut, Database, RefreshCw, MessageSquare, AlertCircle, Loader2, CheckCircle2, XCircle, Clock, Send, ChevronDown, MapPin, Tag, Layout, Sparkles, Edit2, AlertTriangle, Search, Upload, Plus, Trash2, Undo2, RotateCw, Copy, ArrowUp, ArrowDown, Group, Ungroup, AlignLeft, AlignRight, AlignStartVertical, AlignEndVertical, AlignCenter, AlignJustify, Minus, LayoutGrid, Ruler, Maximize2, Redo2, Settings2, Type, RotateCcw, Zap, Box } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { PROTOCOL_DATA, HALL_CONFIGS, TURKEY_CITIES, CITY_HALLS } from './constants';
 import { motion } from 'motion/react';
@@ -69,6 +69,11 @@ const App: React.FC = () => {
   const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
   const [isDrawingSunAngle, setIsDrawingSunAngle] = useState(false);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [cameraSettings, setCameraSettings] = useState({
+    height: 10,
+    fov: 45,
+    target: [0, 0, 0] as [number, number, number]
+  });
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [calibrationPoints, setCalibrationPoints] = useState<{x: number, y: number}[]>([]);
   const [calibrationModalOpen, setCalibrationModalOpen] = useState(false);
@@ -1807,7 +1812,74 @@ const App: React.FC = () => {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
+        {/* Top Toolbar */}
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-2 bg-white/90 backdrop-blur-2xl border-2 border-slate-100 rounded-3xl shadow-2xl shadow-slate-200/50">
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+          <button
+            onClick={() => setViewMode('2d')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+              viewMode === '2d' 
+                ? 'bg-white text-blue-600 shadow-lg shadow-blue-100' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" /> 2D Görünüm
+          </button>
+          <button
+            onClick={() => setViewMode('3d')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+              viewMode === '3d' 
+                ? 'bg-white text-blue-600 shadow-lg shadow-blue-100' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Box className="w-4 h-4" /> 3D Görünüm
+          </button>
+        </div>
+        
+        <div className="w-px h-8 bg-slate-200 mx-2" />
+        
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={() => setZoom(prev => Math.min(prev + 0.1, 2))}
+            className="p-2.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors"
+            title="Yakınlaştır"
+          >
+            <ZoomIn className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.2))}
+            className="p-2.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors"
+            title="Uzaklaştır"
+          >
+            <ZoomOut className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => {
+              setZoom(0.8);
+              setCameraSettings(prev => ({ ...prev, height: 10, fov: 45 }));
+            }}
+            className="p-2.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors"
+            title="Sıfırla"
+          >
+            <RefreshCw className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="w-px h-8 bg-slate-200 mx-2" />
+
+        <button 
+          onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
+          className={`p-2.5 rounded-xl transition-all ${
+            isRightPanelOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-slate-100 text-slate-500'
+          }`}
+          title="Ayarlar"
+        >
+          <Settings2 className="w-5 h-5" />
+        </button>
+      </div>
+
+      <Sidebar 
           data={filteredProtocolList} 
           selectedIds={selectedAttendeeIds} setSelectedIds={setSelectedAttendeeIds} 
           searchTerm={searchTerm} setSearchTerm={setSearchTerm} 
@@ -1974,77 +2046,77 @@ const App: React.FC = () => {
             <div className="flex-1 w-full overflow-auto flex justify-center items-start pt-20 scrollbar-hide">
                 {(selectedHall && allHallConfigs[selectedHall]) || activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library' ? (
                   <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className="transition-transform duration-300 ease-out p-12">
-                      <SeatingPlan 
-                        hall={allHallConfigs[selectedHall] || { 
-                          name: 'YENİ TASARIM', 
-                          rows: [], 
-                          elements: [
-                            { id: 'default-stage', type: 'stage', x: 200, y: 0, rotation: 0, width: 400, height: 100, label: 'SAHNE' }
-                          ], 
-                          stage: undefined 
-                        }} 
-                        seating={seating} 
-                        onSeatClick={(id) => { setActiveSeatId(id); setGuestModalOpen(true); }}
-                        isEditable={activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library'}
-                        isCalibrating={isCalibrating}
-                        isDrawingDimension={isDrawingDimension}
-                        isTapeMeasuring={isTapeMeasuring}
-                        isDrawingPolygon={isDrawingPolygon}
-                        isDrawingSunAngle={isDrawingSunAngle}
-                        onCalibrationComplete={(pixelDist) => {
-                          setIsCalibrating(false);
-                          setLastPixelDist(pixelDist);
-                          setCalibrationModalOpen(true);
-                        }}
-                        onCancelCalibration={() => setIsCalibrating(false)}
-                        onToggleDrawingDimension={() => setIsDrawingDimension(!isDrawingDimension)}
-                        onToggleTapeMeasuring={() => setIsTapeMeasuring(!isTapeMeasuring)}
-                        onToggleDrawingPolygon={() => {
-                          setIsDrawingPolygon(!isDrawingPolygon);
-                          setIsCalibrating(false);
-                          setIsDrawingDimension(false);
-                          setIsTapeMeasuring(false);
-                          setIsDrawingSunAngle(false);
-                          setPreviewElements(null);
-                        }}
-                        onToggleDrawingSunAngle={() => {
-                          setIsDrawingSunAngle(!isDrawingSunAngle);
-                          setIsCalibrating(false);
-                          setIsDrawingDimension(false);
-                          setIsTapeMeasuring(false);
-                          setIsDrawingPolygon(false);
-                          setPreviewElements(null);
-                        }}
-                        onUpdateHall={updateHall}
-                        zoom={zoom}
-                        previewElements={previewElements}
-                        selectedElementIds={selectedElementIds}
-                        setSelectedElementIds={setSelectedElementIds}
-                        onUndo={handleUndo}
-                        onRedo={handleRedo}
-                        getTemplateElements={getTemplateElements}
-                        blockRows={blockRows}
-                        blockChairs={blockChairs}
-                        handleRemoveElements={handleRemoveElements}
-                        handleDuplicateElements={handleDuplicateElements}
-                        handleReorderElements={handleReorderElements}
-                        handleAlignElements={handleAlignElements}
-                        handleDistributeElements={handleDistributeElements}
-                        handleGroupElements={handleGroupElements}
-                        handleUngroupElements={handleUngroupElements}
-                        handleUpdateElements={handleUpdateElements}
-                        selectionBoundingBox={selectionBoundingBox}
-                        snapToGrid={snapToGrid}
-                        showGrid={showGrid}
-                        showDimensions={showDimensions}
-                        is3DMode={is3DMode}
-                        onToggle3DMode={setIs3DMode}
-                        onFileChange={setInvitationFile}
-                        referenceImages={referenceImages}
-                        onUpdateReferenceImage={handleUpdateReferenceImage}
-                        pendingModel={pendingSketchfabModel}
-                        onModelPlaced={handleModelPlaced}
-                      />
+            <SeatingPlan 
+              hall={allHallConfigs[selectedHall] || { 
+                name: 'YENİ TASARIM', 
+                rows: [], 
+                elements: [
+                  { id: 'default-stage', type: 'stage', x: 200, y: 0, rotation: 0, width: 400, height: 100, label: 'SAHNE' }
+                ], 
+                stage: undefined 
+              }} 
+              seating={seating} 
+              onSeatClick={(id) => { setActiveSeatId(id); setGuestModalOpen(true); }}
+              isEditable={activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library'}
+              isCalibrating={isCalibrating}
+              isDrawingDimension={isDrawingDimension}
+              isTapeMeasuring={isTapeMeasuring}
+              isDrawingPolygon={isDrawingPolygon}
+              isDrawingSunAngle={isDrawingSunAngle}
+              onCalibrationComplete={(pixelDist) => {
+                setIsCalibrating(false);
+                setLastPixelDist(pixelDist);
+                setCalibrationModalOpen(true);
+              }}
+              onCancelCalibration={() => setIsCalibrating(false)}
+              onToggleDrawingDimension={() => setIsDrawingDimension(!isDrawingDimension)}
+              onToggleTapeMeasuring={() => setIsTapeMeasuring(!isTapeMeasuring)}
+              onToggleDrawingPolygon={() => {
+                setIsDrawingPolygon(!isDrawingPolygon);
+                setIsCalibrating(false);
+                setIsDrawingDimension(false);
+                setIsTapeMeasuring(false);
+                setIsDrawingSunAngle(false);
+                setPreviewElements(null);
+              }}
+              onToggleDrawingSunAngle={() => {
+                setIsDrawingSunAngle(!isDrawingSunAngle);
+                setIsCalibrating(false);
+                setIsDrawingDimension(false);
+                setIsTapeMeasuring(false);
+                setIsDrawingPolygon(false);
+                setPreviewElements(null);
+              }}
+              onUpdateHall={updateHall}
+              zoom={zoom}
+              previewElements={previewElements}
+              selectedElementIds={selectedElementIds}
+              setSelectedElementIds={setSelectedElementIds}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              getTemplateElements={getTemplateElements}
+              blockRows={blockRows}
+              blockChairs={blockChairs}
+              handleRemoveElements={handleRemoveElements}
+              handleDuplicateElements={handleDuplicateElements}
+              handleReorderElements={handleReorderElements}
+              handleAlignElements={handleAlignElements}
+              handleDistributeElements={handleDistributeElements}
+              handleGroupElements={handleGroupElements}
+              handleUngroupElements={handleUngroupElements}
+              handleUpdateElements={handleUpdateElements}
+              selectionBoundingBox={selectionBoundingBox}
+              snapToGrid={snapToGrid}
+              showGrid={showGrid}
+              showDimensions={showDimensions}
+              is3DMode={viewMode === '3d'}
+              onToggle3DMode={(val) => setViewMode(val ? '3d' : '2d')}
+              onFileChange={setInvitationFile}
+              referenceImages={referenceImages}
+              onUpdateReferenceImage={handleUpdateReferenceImage}
+              pendingModel={pendingSketchfabModel}
+              onModelPlaced={handleModelPlaced}
+            />
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full w-full gap-12 p-12 animate-in fade-in zoom-in duration-700">
@@ -2112,8 +2184,8 @@ const App: React.FC = () => {
             isTapeMeasuring={isTapeMeasuring}
             isDrawingPolygon={isDrawingPolygon}
             isDrawingSunAngle={isDrawingSunAngle}
-            is3DMode={is3DMode}
-            onToggle3DMode={() => setIs3DMode(!is3DMode)}
+            is3DMode={viewMode === '3d'}
+            onToggle3DMode={() => setViewMode(viewMode === '3d' ? '2d' : '3d')}
             onAddReferenceImage={handleAddReferenceImage}
             onRemoveReferenceImage={handleRemoveReferenceImage}
             onUpdateReferenceImage={handleUpdateReferenceImage}
@@ -2147,6 +2219,8 @@ const App: React.FC = () => {
             }}
             onStartFreeDraw={handleStartFreeDraw}
             getTemplateElements={getTemplateElements}
+            cameraSettings={cameraSettings}
+            onUpdateCameraSettings={(updates) => setCameraSettings(prev => ({ ...prev, ...updates }))}
           />
         </main>
       </div>
