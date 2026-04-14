@@ -48,12 +48,8 @@ interface RightSidebarProps {
   onRemoveReferenceImage?: (id: string) => void;
   onUpdateReferenceImage?: (id: string, updates: Partial<ReferenceImage>) => void;
   referenceImages?: ReferenceImage[];
-  cameraSettings?: {
-    height: number;
-    fov: number;
-    target: [number, number, number];
-  };
-  onUpdateCameraSettings?: (updates: Partial<{ height: number, fov: number, target: [number, number, number] }>) => void;
+  cameraSettings?: any;
+  onUpdateCameraSettings?: (updates: any) => void;
 }
 
 const RightSidebar: React.FC<RightSidebarProps> = ({
@@ -1175,56 +1171,58 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                     <div className={`w-4 h-4 rounded-full bg-white shadow-lg transition-transform duration-500 ${is3DMode ? 'translate-x-5' : 'translate-x-0'}`} />
                   </div>
                 </button>
-                
-                {/* Camera Settings Panel */}
-                {is3DMode && cameraSettings && onUpdateCameraSettings && (
-                  <div className="p-6 bg-slate-900 rounded-[32px] border border-white/10 space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                      <div className="w-10 h-10 bg-indigo-500/20 rounded-2xl flex items-center justify-center">
-                        <Settings2 className="w-5 h-5 text-indigo-400" />
+
+                {/* Camera Settings (Only in 3D Mode) */}
+                {is3DMode && cameraSettings && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-6 bg-slate-900 rounded-[32px] border-2 border-slate-800 shadow-xl space-y-6"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <Monitor className="w-5 h-5 text-white" />
                       </div>
                       <div>
                         <h4 className="text-[11px] font-black text-white uppercase tracking-widest">Kamera Ayarları</h4>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">3D Sahne Görünümü</p>
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">3D Görünüm Kontrolü</p>
                       </div>
                     </div>
 
                     <div className="space-y-4">
-                      {/* Height Control */}
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kamera Yüksekliği</label>
-                          <span className="text-[10px] font-black text-indigo-400">{cameraSettings.height}m</span>
+                        <div className="flex items-center justify-between px-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Kamera Yüksekliği</label>
+                          <span className="text-[9px] font-black text-blue-400">{cameraSettings.height}m</span>
                         </div>
                         <input 
-                          type="range" 
-                          min="1" 
-                          max="50" 
+                          type="range"
+                          min="1"
+                          max="50"
                           step="1"
                           value={cameraSettings.height}
-                          onChange={(e) => onUpdateCameraSettings({ height: parseInt(e.target.value) })}
-                          className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                          onChange={(e) => onUpdateCameraSettings?.({ height: parseInt(e.target.value) })}
+                          className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                         />
                       </div>
 
-                      {/* FOV Control */}
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Görüş Açısı (FOV)</label>
-                          <span className="text-[10px] font-black text-indigo-400">{cameraSettings.fov}°</span>
+                        <div className="flex items-center justify-between px-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Bakış Açısı (FOV)</label>
+                          <span className="text-[9px] font-black text-blue-400">{cameraSettings.fov}°</span>
                         </div>
                         <input 
-                          type="range" 
-                          min="10" 
-                          max="120" 
+                          type="range"
+                          min="10"
+                          max="120"
                           step="1"
                           value={cameraSettings.fov}
-                          onChange={(e) => onUpdateCameraSettings({ fov: parseInt(e.target.value) })}
-                          className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                          onChange={(e) => onUpdateCameraSettings?.({ fov: parseInt(e.target.value) })}
+                          className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                         />
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
 
                 {/* Reference Images Upload Area */}
