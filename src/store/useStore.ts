@@ -45,9 +45,23 @@ export const useStore = create<DesignState>((set, get) => ({
   },
   syncToProtocol: () => {
     const { elements, protocolList } = get();
-    // 3D verisindeki koltukları protokol listesiyle eşleştirme mantığı
-    const seatedCount = elements.filter(el => el.type === 'chair').length;
-    console.log(`Syncing ${seatedCount} seats to protocol list...`);
-    // Burada daha derin bir eşleştirme mantığı kurulabilir
+    
+    // 3D'deki koltukları (chair) filtrele
+    const chairs = elements.filter(el => el.type === 'chair');
+    
+    // Protokol listesindeki kişileri koltuklara ata
+    const updatedProtocolList = protocolList.map((person, index) => {
+      if (index < chairs.length) {
+        return {
+          ...person,
+          koltuk_no: chairs[index].label || `Koltuk ${index + 1}`,
+          katilim_durumu: person.katilim_durumu || 'bekliyor'
+        };
+      }
+      return person;
+    });
+
+    set({ protocolList: updatedProtocolList });
+    console.log(`Senkronizasyon tamamlandı: ${chairs.length} koltuk eşleştirildi.`);
   }
 }));

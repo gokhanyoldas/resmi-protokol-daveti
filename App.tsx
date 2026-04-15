@@ -1819,11 +1819,11 @@ const App: React.FC = () => {
 
       <div className="flex flex-1 overflow-hidden">
         {activeLayoutTab === 'template' ? (
-          <div className="fixed inset-0 z-[9999] bg-white">
+          <div className="flex-1 h-full relative bg-white">
             <div className="absolute top-6 right-6 z-[10000]">
               <button 
                 onClick={() => setActiveLayoutTab('ai')}
-                className="p-3 bg-slate-900 text-white rounded-2xl shadow-2xl hover:bg-slate-800 transition-all flex items-center gap-2"
+                className="p-3 bg-slate-900 text-white rounded-2xl shadow-2xl hover:bg-slate-800 transition-all flex items-center gap-2 group active:scale-95"
               >
                 <X className="w-5 h-5" />
                 <span className="text-[11px] font-black uppercase tracking-widest pr-1">Editörden Çık</span>
@@ -1834,77 +1834,77 @@ const App: React.FC = () => {
         ) : (
           <>
             <Sidebar 
-          data={filteredProtocolList} 
-          selectedIds={selectedAttendeeIds} setSelectedIds={setSelectedAttendeeIds} 
-          searchTerm={searchTerm} setSearchTerm={setSearchTerm} 
-          onSendInvitations={handleSendRSVP} 
-          onSendSeatNumbers={handleSendSeatNumbers}
-          onPrintLabels={handlePrintLabels}
-          onFileChange={setInvitationFile} 
-          invitationFile={invitationFile} 
-          toggleAll={(s) => setSelectedAttendeeIds(s ? new Set(protocolList.map(p => p.id).filter((id): id is number => id !== undefined)) : new Set())}
-          onRefresh={fetchStatuses}
-          selectedCity={selectedCity}
-          setSelectedCity={setSelectedCity}
-          selectedHall={selectedHall}
-          setSelectedHall={setSelectedHall}
-          onYerlestir={handleYerlestir}
-          isSyncing={isSyncing}
-          onOpenImport={() => setIsImportPanelOpen(true)}
-          onOpenHallAnalysis={() => setIsHallAnalysisOpen(true)}
-          onStartFreeDraw={handleStartFreeDraw}
-          onUpdatePerson={handleUpdatePerson}
-          selectedElementIds={selectedElementIds}
-          setSelectedElementIds={setSelectedElementIds}
-          onUpdateElements={handleUpdateElements}
-          onRemoveElements={handleRemoveElements}
-          onDuplicateElements={handleDuplicateElements}
-          onReorderElements={handleReorderElements}
-          onAlignElements={handleAlignElements}
-          onDistributeElements={handleDistributeElements}
-          onGroupElements={handleGroupElements}
-          onUngroupElements={handleUngroupElements}
-          onSelectAll={handleSelectAll}
-          onClearSelection={handleClearSelection}
-          botInfo={botInfo}
-          activeLayoutTab={activeLayoutTab}
-          setActiveLayoutTab={handleLayoutTabChange}
-          hall={allHallConfigs[selectedHall] || { name: 'YENİ TASARIM', rows: [], stage: { label: 'SAHNE', position: 'top', size: 'medium' } }}
-          onUpdateHall={updateHall}
-          onAddElement={handleAddElement}
-          onPreviewTemplate={setPreviewElements}
-          onSaveHall={handleSaveHall}
-          onDeleteHall={handleDeleteHall}
-          allCityHalls={allCityHalls}
-          allHallConfigs={allHallConfigs}
-          dynamicHalls={dynamicHalls}
-          stats={stats}
-          onOpenPreview={() => setIsPreviewOpen(true)}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          completedSteps={completedSteps}
-          getTemplateElements={getTemplateElements}
-          blockRows={blockRows}
-          setBlockRows={setBlockRows}
-          blockChairs={blockChairs}
-          setBlockChairs={setBlockChairs}
-          tableChairCount={tableChairCount}
-          setTableChairCount={setTableChairCount}
-          is3DMode={viewMode === '3d'}
-          onToggle3DMode={(val: boolean) => setViewMode(val ? '3d' : '2d')}
-          isCollapsed={isSidebarCollapsed}
-          setIsCollapsed={setIsSidebarCollapsed}
-          onSmartAutoLayout={handleSmartAutoLayout}
-          onMagicLayout={handleMagicLayout}
-          isGeneratingLayout={isGeneratingLayout}
-          isRightPanelOpen={isRightPanelOpen}
-          setIsRightPanelOpen={setIsRightPanelOpen}
-          onTrellisUpload={handleTrellisUpload}
-          isTrellisGenerating={isTrellisGenerating}
-          onSelectSketchfabModel={handleSelectSketchfabModel}
-        />
+              data={filteredProtocolList} 
+                selectedIds={selectedAttendeeIds} setSelectedIds={setSelectedAttendeeIds} 
+                searchTerm={searchTerm} setSearchTerm={setSearchTerm} 
+                onSendInvitations={handleSendRSVP} 
+                onSendSeatNumbers={handleSendSeatNumbers}
+                onPrintLabels={handlePrintLabels}
+                onFileChange={setInvitationFile} 
+                invitationFile={invitationFile} 
+                toggleAll={(s) => setSelectedAttendeeIds(s ? new Set(protocolList.map(p => p.id).filter((id): id is number => id !== undefined)) : new Set())}
+                onRefresh={fetchStatuses}
+                selectedCity={selectedCity}
+                setSelectedCity={setSelectedCity}
+                selectedHall={selectedHall}
+                setSelectedHall={setSelectedHall}
+                onYerlestir={handleYerlestir}
+                isSyncing={isSyncing}
+                onOpenImport={() => setIsImportPanelOpen(true)}
+                onOpenHallAnalysis={() => setIsHallAnalysisOpen(true)}
+                onStartFreeDraw={handleStartFreeDraw}
+                onUpdatePerson={handleUpdatePerson}
+                selectedElementIds={selectedElementIds}
+                setSelectedElementIds={setSelectedElementIds}
+                onUpdateElements={handleUpdateElements}
+                onRemoveElements={handleRemoveElements}
+                onDuplicateElements={handleDuplicateElements}
+                onReorderElements={handleReorderElements}
+                onAlignElements={handleAlignElements}
+                onDistributeElements={handleDistributeElements}
+                onGroupElements={handleGroupElements}
+                onUngroupElements={handleUngroupElements}
+                onSelectAll={handleSelectAll}
+                onClearSelection={handleClearSelection}
+                botInfo={botInfo}
+                activeLayoutTab={activeLayoutTab}
+                setActiveLayoutTab={handleLayoutTabChange}
+                hall={allHallConfigs[selectedHall] || { name: 'YENİ TASARIM', rows: [], stage: { label: 'SAHNE', position: 'top', size: 'medium' } }}
+                onUpdateHall={updateHall}
+                onAddElement={handleAddElement}
+                onPreviewTemplate={setPreviewElements}
+                onSaveHall={handleSaveHall}
+                onDeleteHall={handleDeleteHall}
+                allCityHalls={allCityHalls}
+                allHallConfigs={allHallConfigs}
+                dynamicHalls={dynamicHalls}
+                stats={stats}
+                onOpenPreview={() => setIsPreviewOpen(true)}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                completedSteps={completedSteps}
+                getTemplateElements={getTemplateElements}
+                blockRows={blockRows}
+                setBlockRows={setBlockRows}
+                blockChairs={blockChairs}
+                setBlockChairs={setBlockChairs}
+                tableChairCount={tableChairCount}
+                setTableChairCount={setTableChairCount}
+                is3DMode={viewMode === '3d'}
+                onToggle3DMode={(val: boolean) => setViewMode(val ? '3d' : '2d')}
+                isCollapsed={isSidebarCollapsed}
+                setIsCollapsed={setIsSidebarCollapsed}
+                onSmartAutoLayout={handleSmartAutoLayout}
+                onMagicLayout={handleMagicLayout}
+                isGeneratingLayout={isGeneratingLayout}
+                isRightPanelOpen={isRightPanelOpen}
+                setIsRightPanelOpen={setIsRightPanelOpen}
+                onTrellisUpload={handleTrellisUpload}
+                isTrellisGenerating={isTrellisGenerating}
+                onSelectSketchfabModel={handleSelectSketchfabModel}
+              />
         <main className="flex-1 overflow-hidden relative flex bg-slate-100">
           <div className="flex-1 overflow-hidden relative flex flex-col items-center bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px]">
           {/* Floating Workspace Controls */}
@@ -2019,11 +2019,7 @@ const App: React.FC = () => {
           </div>
 
             <div className="flex-1 w-full overflow-auto flex justify-center items-start pt-20 scrollbar-hide">
-                {activeLayoutTab === 'template' ? (
-                  <div className="w-full h-full absolute inset-0 z-50">
-                    <PascalEditor />
-                  </div>
-                ) : (selectedHall && allHallConfigs[selectedHall]) || activeLayoutTab === 'draw' || activeLayoutTab === 'library' ? (
+                {(selectedHall && allHallConfigs[selectedHall]) || activeLayoutTab === 'draw' || activeLayoutTab === 'library' ? (
                   <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className="transition-transform duration-300 ease-out p-12">
             <SeatingPlan 
               hall={allHallConfigs[selectedHall] || { 
@@ -2036,7 +2032,7 @@ const App: React.FC = () => {
               }} 
               seating={seating} 
               onSeatClick={(id) => { setActiveSeatId(id); setGuestModalOpen(true); }}
-              isEditable={activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library'}
+              isEditable={activeLayoutTab === 'draw' || activeLayoutTab === 'library'}
               isCalibrating={isCalibrating}
               isDrawingDimension={isDrawingDimension}
               isTapeMeasuring={isTapeMeasuring}

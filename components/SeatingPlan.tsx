@@ -985,6 +985,7 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
   };
 
   const renderElement = (el: HallElement) => {
+    if (!el) return null;
     if (el.type === 'led-screen') {
       const fontSize = Math.min(el.width || 160, el.height || 10) / 1.2;
       return (
@@ -1174,10 +1175,10 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
     }
 
     if (el.type === 'dimension-line') {
-      const x1 = el.x;
-      const y1 = el.y;
-      const x2 = el.x2 || x1 + 100;
-      const y2 = el.y2 || y1;
+      const x1 = el.x || 0;
+      const y1 = el.y || 0;
+      const x2 = typeof el.x2 === 'number' ? el.x2 : x1 + 100;
+      const y2 = typeof el.y2 === 'number' ? el.y2 : y1;
       const dx = x2 - x1;
       const dy = y2 - y1;
       const dist = Math.sqrt(dx * dx + dy * dy);
