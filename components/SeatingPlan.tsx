@@ -398,92 +398,6 @@ const EventObject3D = ({ el, selectedElementIds }: { el: HallElement, selectedEl
   return <Element3D el={el} selectedElementIds={selectedElementIds} />;
 };
 
-const Scene3D = ({ hall, referenceImages, selectedElementIds, cameraSettings }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string>, cameraSettings?: any }) => {
-  return <DigitalTwinWorkstation hall={hall} referenceImages={referenceImages} selectedElementIds={selectedElementIds} cameraSettings={cameraSettings} />;
-};
-
-const DigitalTwinWorkstation = ({ hall, referenceImages, selectedElementIds, cameraSettings }: { hall: HallConfig, referenceImages: ReferenceImage[], selectedElementIds: Set<string>, cameraSettings?: any }) => {
-  // Computer Vision Simulation: Extracting numerical data from calibration
-  const sceneSchema = useMemo(() => {
-    const scaleFactor = hall.scaleCalibration?.pixelDistance || 1;
-    const realDist = hall.scaleCalibration?.realDistance || 1;
-    const pixelsPerMeter = scaleFactor / realDist;
-
-    const schema = {
-      venueId: hall.name || 'unknown',
-      scaleFactor: pixelsPerMeter,
-      bounds: { width: hall.width || 1000, height: hall.height || 1000 },
-      detectedObjects: (hall.elements || [])
-        .filter(el => el.type === 'polygon' || el.type === 'building')
-        .map(el => ({
-          type: el.type === 'polygon' ? 'empty_space' : 'building',
-          points: el.points || [],
-          estimatedHeight: el.h
-        })),
-      calibrationLine: hall.elements?.find(el => el.type === 'dimension-line') ? {
-        p1: { x: 0, y: 0 }, // Simplified for simulation
-        p2: { x: 100, y: 0 },
-        realDistance: realDist
-      } : null
-    };
-
-    console.log("Generated Digital Twin Scene Schema:", JSON.stringify(schema, null, 2));
-    return schema;
-  }, [hall]);
-
-  return (
-    <>
-      <PerspectiveCamera 
-        makeDefault 
-        position={[400, cameraSettings?.height * 40 || 400, 400]} 
-        fov={cameraSettings?.fov || 30} 
-      />
-      <OrbitControls 
-        makeDefault 
-        minPolarAngle={Math.PI / 6} 
-        maxPolarAngle={Math.PI / 2.2} 
-        enableDamping={true}
-        dampingFactor={0.05}
-        minDistance={50}
-        maxDistance={1200}
-        target={cameraSettings?.target || [0, 0, 0]}
-      />
-      
-      <Environment preset="studio" />
-      <ambientLight intensity={1.2} />
-      <spotLight 
-        position={[400, 600, 400]} 
-        angle={0.2} 
-        penumbra={1} 
-        intensity={2.5} 
-        castShadow 
-        shadow-mapSize={[4096, 4096]}
-      />
-      
-      <FloorPlan3D hall={hall} />
-
-      <group>
-        {referenceImages.map(img => (
-          <ReferenceImage3D key={img.id} img={img} />
-        ))}
-
-        {hall.elements?.map(el => (
-          <React.Fragment key={el.id}>
-            <BuildingProxy3D el={el} selectedElementIds={selectedElementIds} />
-            <EventObject3D el={el} selectedElementIds={selectedElementIds} />
-          </React.Fragment>
-        ))}
-      </group>
-
-      <ContactShadows position={[0, 0.1, 0]} opacity={0.7} scale={1000} blur={2} far={20} />
-      
-      <GizmoHelper alignment="bottom-right" margin={[100, 100]}>
-        <GizmoViewport axisColors={['#f87171', '#4ade80', '#60a5fa']} labelColor="white" />
-      </GizmoHelper>
-    </>
-  );
-};
-
 const SeatingPlan: React.FC<SeatingPlanProps> = ({ 
   hall, seating, onSeatClick, isEditable, isCalibrating, isDrawingDimension, isTapeMeasuring, isDrawingPolygon, isDrawingSunAngle, onCalibrationComplete, onCancelCalibration, onToggleDrawingDimension, onToggleTapeMeasuring, onToggleDrawingPolygon, onToggleDrawingSunAngle, onUpdateHall, zoom = 1, previewElements,
   selectedElementIds, setSelectedElementIds, onUndo, onRedo,
@@ -500,7 +414,8 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
   referenceImages = [],
   onUpdateReferenceImage,
   pendingModel,
-  onModelPlaced
+  onModelPlaced,
+  cameraSettings
 }) => {
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -1709,6 +1624,7 @@ const SeatingPlan: React.FC<SeatingPlanProps> = ({
             onRemoveElements={handleRemoveElements}
             pendingModel={pendingModel}
             onModelPlaced={onModelPlaced}
+            cameraSettings={cameraSettings}
           />
           
           <button 

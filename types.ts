@@ -81,6 +81,8 @@ export interface HallElement {
     license?: string;
     source?: string;
     originalType?: string;
+    size?: number;
+    thumbnailUrl?: string;
   };
 }
 

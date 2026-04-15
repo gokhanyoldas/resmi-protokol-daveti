@@ -12,13 +12,17 @@ import {
   GizmoHelper,
   GizmoViewport,
   TransformControls,
-  Html
+  Html,
+  Center,
+  Bounds,
+  useBounds
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { HallConfig, ReferenceImage, HallElement } from '../types';
-import { Monitor, Move, Box, Sparkles, Loader2, Camera, Sun, BoxSelect, RotateCw, Maximize2 } from 'lucide-react';
+import { Monitor, Move, Box, Sparkles, Loader2, Camera, Sun, BoxSelect, RotateCw, Maximize2, AlertCircle } from 'lucide-react';
 import { analyzeSceneWithAI } from '../src/services/geminiService';
 import { getSketchfabDownloadUrl } from '../src/services/sketchfabService';
+import { generateTrellisModel } from '../src/apis/trellisApi';
 
 interface DrawingCanvasProps {
   hall: HallConfig;
@@ -30,6 +34,11 @@ interface DrawingCanvasProps {
   onRemoveElements?: (ids: string[]) => void;
   pendingModel?: any;
   onModelPlaced?: (x: number, y: number) => void;
+  cameraSettings?: {
+    height: number;
+    fov: number;
+    target: [number, number, number];
+  };
 }
 
 /**
@@ -370,50 +379,80 @@ const ExtrudedBuilding = ({
 /**
  * GLTFModel: Loads and auto-scales an external 3D asset (e.g., from TRELLIS)
  */
-const GLTFModel = ({ url, height, width, depth, useMockupMaterial = false }: { url: string, height: number, width: number, depth: number, useMockupMaterial?: boolean }) => {
-  const { scene } = useGLTF(url);
+const GLTFModel = ({ url, height, width, depth, useMockupMaterial = false, onLoaded }: { url: string, height: number, width: number, depth: number, useMockupMaterial?: boolean, onLoaded?: () => void }) => {
+  const [error, setError] = React.useState<string | null>(null);
   
+  // 1. Trellis Yükleme Koruması: onError callback
+  const { scene } = useGLTF(url, true, true, (loader) => {
+    loader.manager.onError = (url) => {
+      console.error(`Model yükleme hatası: ${url}`);
+      setError("Model yüklenemedi veya bozuk.");
+    };
+  });
+
+  useEffect(() => {
+    if (scene && onLoaded) {
+      onLoaded();
+    }
+  }, [scene, onLoaded]);
+
   const scaledScene = useMemo(() => {
+    if (!scene) return null;
     const clone = scene.clone();
+    
+    // 2. Sahne Temizliği: Mevcut tüm çocukları sil (clone olduğu için temiz başlarız ama traverse ile kontrol edelim)
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
     const box = new THREE.Box3().setFromObject(clone);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     
-    // Scale to fit the target dimensions
-    // X -> width, Y -> height (h), Z -> depth (height in 2D)
     const scaleX = width / (size.x || 1);
     const scaleY = height / (size.y || 1);
     const scaleZ = depth / (size.z || 1);
     
     clone.scale.set(scaleX, scaleY, scaleZ);
-    
-    // Center horizontally and pin bottom to y=0
     clone.position.set(-center.x * scaleX, -box.min.y * scaleY, -center.z * scaleZ);
     
-    const mockupMaterial = new THREE.MeshStandardMaterial({
-      color: '#f8f8f7',
-      roughness: 0.2,
-      metalness: 0.1,
-      envMapIntensity: 1
-    });
-
-    clone.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        
-        if (useMockupMaterial) {
-          (child as THREE.Mesh).material = mockupMaterial;
-        } else if ((child as THREE.Mesh).material) {
-          ((child as THREE.Mesh).material as THREE.MeshStandardMaterial).envMapIntensity = 1.5;
-        }
-      }
-    });
-    
     return clone;
-  }, [scene, height, width, depth, useMockupMaterial]);
+  }, [scene, height, width, depth]);
 
-  return <primitive object={scaledScene} />;
+  if (error) {
+    return (
+      <Html center>
+        <div className="bg-red-500/90 text-white p-4 rounded-2xl flex items-center gap-2 whitespace-nowrap">
+          <AlertCircle className="w-4 h-4" />
+          <span className="text-[10px] font-black uppercase">{error}</span>
+        </div>
+      </Html>
+    );
+  }
+
+  if (!scaledScene) return null;
+
+  return (
+    <Center top>
+      <primitive object={scaledScene} />
+    </Center>
+  );
+};
+
+/**
+ * CameraFitter: Automatically adjusts camera to fit the model
+ */
+const CameraFitter = ({ active }: { active: boolean }) => {
+  const bounds = useBounds();
+  useEffect(() => {
+    if (active) {
+      bounds.refresh().clip().fit();
+    }
+  }, [active, bounds]);
+  return null;
 };
 
 /**
@@ -493,7 +532,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   onAddElements,
   onRemoveElements,
   pendingModel,
-  onModelPlaced
+  onModelPlaced,
+  cameraSettings = { height: 10, fov: 45, target: [0, 0, 0] }
 }) => {
   const dronePhotoUrl = hall.backgroundImage;
   const [isDragging, setIsDragging] = React.useState(false);
@@ -508,10 +548,11 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const [isSketchfabLoading, setIsSketchfabLoading] = React.useState(false);
   const [sketchfabError, setSketchfabError] = React.useState<string | null>(null);
   const [transformMode, setTransformMode] = React.useState<'translate' | 'rotate' | 'scale'>('translate');
+  const [shouldFitCamera, setShouldFitCamera] = React.useState(false);
 
   useEffect(() => {
     const handleAdd3DObject = async (e: any) => {
-      const { uid, name, creator, license } = e.detail;
+      const { uid, name, creator, license, thumbnailUrl } = e.detail;
       if (!uid) return;
 
       setIsSketchfabLoading(true);
@@ -541,7 +582,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
             metadata: {
               source: 'Sketchfab',
               creator: creator,
-              license: license
+              license: license,
+              thumbnailUrl: thumbnailUrl
             }
           };
 
@@ -552,11 +594,17 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
 
           onAddElements([newElement]);
           onSelectElements?.(new Set([newElement.id]));
+          
+          // Otomatik Odaklanma: Model yüklendiğinde kamerayı odakla
+          setShouldFitCamera(true);
+          setTimeout(() => setShouldFitCamera(false), 1000);
         }
       } catch (error: any) {
         console.error('Error adding Sketchfab object:', error);
-        // Special handling for 403 (Forbidden/Paid models)
-        if (error.message?.includes('403') || error.message?.includes('ücretli')) {
+        // Hata Yakalama (Fallback): Kullanıcıya özel hata mesajı
+        if (error.message?.includes('404') || error.message?.includes('bulunamadı')) {
+          setSketchfabError('Model dosyası bulunamadı, lütfen başka bir model deneyin.');
+        } else if (error.message?.includes('403') || error.message?.includes('ücretli')) {
           setSketchfabError('Bu model ücretli olabilir veya indirme izni bulunmuyor.');
         } else {
           setSketchfabError(error.message || 'Model yüklenirken bir hata oluştu.');
@@ -685,29 +733,48 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     if (!dronePhotoUrl) return;
     setIsGenerating3D(true);
     try {
-      // Simulated API call to TRELLIS (Image-to-3D)
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      // 2. Sahne Temizliği: 'SAHNE' etiketli placeholder'ı bul ve temizle
+      const sahnePlaceholder = (hall.elements || []).find(el => el.label === 'SAHNE');
       
-      // Simulated result: A high-fidelity GLB model
-      // Using a sample building model from Khronos
-      const modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTextured/glTF-Binary/BoxTextured.glb';
+      // Get the image file from dronePhotoUrl (simulated)
+      const response = await fetch(dronePhotoUrl);
+      const blob = await response.blob();
+      const file = new File([blob], "drone_capture.jpg", { type: "image/jpeg" });
+
+      // Call the new Trellis API
+      const result = await generateTrellisModel(file);
       
       const newBuilding: HallElement = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: `trellis-${Date.now()}`,
         type: 'building',
-        x: workspaceWidth / 2,
-        y: workspaceHeight / 2,
-        modelUrl: modelUrl,
-        h: 8, // 8 meters tall
+        x: sahnePlaceholder?.x || workspaceWidth / 2,
+        y: sahnePlaceholder?.y || workspaceHeight / 2,
+        modelUrl: result.modelUrl,
+        h: 8,
         rotation: 0,
-        label: 'TRELLIS AI Building',
-        color: '#ffffff'
+        label: 'TRELLIS AI Digital Twin',
+        color: '#ffffff',
+        metadata: {
+          source: 'TRELLIS AI',
+          size: result.size
+        }
       };
       
+      // Remove placeholder if found
+      if (sahnePlaceholder && onRemoveElements) {
+        onRemoveElements([sahnePlaceholder.id]);
+      }
+
       onAddElements?.([newBuilding]);
-    } catch (error) {
+      onSelectElements?.(new Set([newBuilding.id]));
+      
+      // Trigger auto camera fit
+      setShouldFitCamera(true);
+      setTimeout(() => setShouldFitCamera(false), 1000);
+
+    } catch (error: any) {
       console.error("3D Generation failed:", error);
-      alert("3D Model üretimi sırasında bir hata oluştu.");
+      alert(error.message || "3D Model üretimi sırasında bir hata oluştu.");
     } finally {
       setIsGenerating3D(false);
     }
@@ -872,78 +939,86 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         }} 
         onPointerMissed={() => onSelectElements?.(new Set())}
       >
-        <PerspectiveCamera makeDefault position={[30, 30, 30]} fov={40} />
-        <OrbitControls 
-          makeDefault 
-          minPolarAngle={0} 
-          maxPolarAngle={Math.PI / 2.1} 
-          enableDamping 
-          enabled={!isDragging} 
-        />
-        
-        <Environment preset="city" />
-        <ambientLight intensity={0.4} />
-        
-        {/* Real-time Sun Light */}
-        <SunSimulation time={sunTime} />
+        <Bounds fit clip observe margin={1.2}>
+          <CameraFitter active={shouldFitCamera} />
+          <PerspectiveCamera 
+            makeDefault 
+            position={[30, cameraSettings.height, 30]} 
+            fov={cameraSettings.fov} 
+          />
+          <OrbitControls 
+            makeDefault 
+            minPolarAngle={0} 
+            maxPolarAngle={Math.PI / 2.1} 
+            enableDamping 
+            enabled={!isDragging} 
+            target={cameraSettings.target}
+          />
+          
+          <Environment preset="city" />
+          <ambientLight intensity={0.4} />
+          
+          {/* Real-time Sun Light */}
+          <SunSimulation time={sunTime} />
 
-        {dronePhotoUrl ? (
-          <VenueGround 
-            imageUrl={dronePhotoUrl} 
+          {dronePhotoUrl ? (
+            <VenueGround 
+              imageUrl={dronePhotoUrl} 
+              realWidth={realWidth} 
+              realHeight={realHeight} 
+              onPointerDown={handleGroundClick}
+            />
+          ) : (
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow onPointerDown={handleGroundClick}>
+              <planeGeometry args={[realWidth, realHeight]} />
+              <meshStandardMaterial color="#1e293b" />
+            </mesh>
+          )}
+
+          {/* Tracing Visualization */}
+          {isTracingMode && tracingPoints.length > 0 && (
+            <group>
+              {tracingPoints.map((p, i) => (
+                <mesh key={i} position={p}>
+                  <sphereGeometry args={[0.2, 16, 16]} />
+                  <meshBasicMaterial color="#10b981" />
+                </mesh>
+              ))}
+              <line>
+                <bufferGeometry attach="geometry" onUpdate={self => self.setFromPoints([...tracingPoints, tracingPoints[0]])} />
+                <lineBasicMaterial attach="material" color="#10b981" linewidth={2} />
+              </line>
+            </group>
+          )}
+
+          {/* Surrounding Buildings (Procedural Environment) */}
+          <SurroundingEnvironment 
+            workspaceWidth={workspaceWidth} 
+            workspaceHeight={workspaceHeight} 
             realWidth={realWidth} 
             realHeight={realHeight} 
-            onPointerDown={handleGroundClick}
+            dronePhotoUrl={dronePhotoUrl}
           />
-        ) : (
-          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow onPointerDown={handleGroundClick}>
-            <planeGeometry args={[realWidth, realHeight]} />
-            <meshStandardMaterial color="#1e293b" />
-          </mesh>
-        )}
 
-        {/* Tracing Visualization */}
-        {isTracingMode && tracingPoints.length > 0 && (
           <group>
-            {tracingPoints.map((p, i) => (
-              <mesh key={i} position={p}>
-                <sphereGeometry args={[0.2, 16, 16]} />
-                <meshBasicMaterial color="#10b981" />
-              </mesh>
+            {hall.elements?.map(el => (
+              <Element3DProxy 
+                key={el.id} 
+                el={el} 
+                selectedElementIds={selectedElementIds} 
+                onUpdateElements={onUpdateElements}
+                onSelectElements={onSelectElements}
+                onDraggingChange={setIsDragging}
+                transformMode={transformMode}
+                workspaceWidth={workspaceWidth}
+                workspaceHeight={workspaceHeight}
+                realWidth={realWidth}
+                realHeight={realHeight}
+                dronePhotoUrl={dronePhotoUrl}
+              />
             ))}
-            <line>
-              <bufferGeometry attach="geometry" onUpdate={self => self.setFromPoints([...tracingPoints, tracingPoints[0]])} />
-              <lineBasicMaterial attach="material" color="#10b981" linewidth={2} />
-            </line>
           </group>
-        )}
-
-        {/* Surrounding Buildings (Procedural Environment) */}
-        <SurroundingEnvironment 
-          workspaceWidth={workspaceWidth} 
-          workspaceHeight={workspaceHeight} 
-          realWidth={realWidth} 
-          realHeight={realHeight} 
-          dronePhotoUrl={dronePhotoUrl}
-        />
-
-        <group>
-          {hall.elements?.map(el => (
-            <Element3DProxy 
-              key={el.id} 
-              el={el} 
-              selectedElementIds={selectedElementIds} 
-              onUpdateElements={onUpdateElements}
-              onSelectElements={onSelectElements}
-              onDraggingChange={setIsDragging}
-              transformMode={transformMode}
-              workspaceWidth={workspaceWidth}
-              workspaceHeight={workspaceHeight}
-              realWidth={realWidth}
-              realHeight={realHeight}
-              dronePhotoUrl={dronePhotoUrl}
-            />
-          ))}
-        </group>
+        </Bounds>
 
         <ContactShadows position={[0, 0.01, 0]} opacity={0.4} scale={50} blur={2} far={10} />
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>

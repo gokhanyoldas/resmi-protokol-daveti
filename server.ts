@@ -18,6 +18,13 @@ async function startServer() {
 
   app.use(express.json());
 
+  // WebGPU ve Güvenlik Başlıkları
+  app.use((req, res, next) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+    next();
+  });
+
   // API: Protokol Listesini Güncelle (Scraping)
   app.get("/api/sync-protocol", async (req, res) => {
     try {

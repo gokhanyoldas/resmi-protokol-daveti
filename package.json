@@ -37,7 +37,8 @@
     "urijs": "^1.19.11",
     "vite-plugin-commonjs": "^0.10.4",
     "vite-plugin-require-transform": "^1.0.21",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

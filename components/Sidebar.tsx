@@ -65,7 +65,7 @@ interface SidebarProps {
   tableChairCount: number;
   setTableChairCount: (val: number) => void;
   is3DMode: boolean;
-  setIs3DMode: (val: boolean) => void;
+  onToggle3DMode: (val: boolean) => void;
   onSmartAutoLayout: () => void;
   onMagicLayout?: (prompt: string) => void;
   isGeneratingLayout?: boolean;
@@ -109,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   tableChairCount,
   setTableChairCount,
   is3DMode,
-  setIs3DMode,
+  onToggle3DMode,
   isCollapsed = false,
   setIsCollapsed,
   onSmartAutoLayout,

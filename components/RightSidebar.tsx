@@ -147,6 +147,19 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                   <button
                     key={obj.id}
                     onClick={() => {
+                      if (obj.id === 'bistro') {
+                        // Bistro Masa Ataması: Doğrudan Sketchfab modelini çağır
+                        // Stabil ve İndirilebilir Alternatif UID: 747c3286f9f345388062e5871f391e46
+                        window.dispatchEvent(new CustomEvent('add-3d-model', { 
+                          detail: { 
+                            uid: '747c3286f9f345388062e5871f391e46',
+                            name: 'Zac Bistro Table',
+                            creator: 'Sketchfab',
+                            license: 'Standard'
+                          } 
+                        }));
+                        return;
+                      }
                       const centerX = (hall.width || 1200) / 2;
                       const centerY = (hall.height || 800) / 2;
                       onAddElement?.([{
@@ -549,22 +562,40 @@ const RightSidebar: React.FC<RightSidebarProps> = ({
                               </div>
                               
                               {firstElement.metadata?.source === 'Sketchfab' ? (
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-2">
-                                    <User className="w-3 h-3 text-indigo-400" />
-                                    <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-tighter truncate">
-                                      {firstElement.metadata.creator}
-                                    </span>
+                                <div className="space-y-3">
+                                  {firstElement.metadata.thumbnailUrl && (
+                                    <div className="w-full aspect-video rounded-xl overflow-hidden border border-indigo-100 bg-white">
+                                      <img 
+                                        src={firstElement.metadata.thumbnailUrl} 
+                                        alt={firstElement.label} 
+                                        className="w-full h-full object-cover"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    </div>
+                                  )}
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <Box className="w-3.5 h-3.5 text-indigo-500" />
+                                      <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">
+                                        {firstElement.label || 'Sketchfab Model'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <User className="w-3 h-3 text-indigo-400" />
+                                      <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-tighter truncate">
+                                        {firstElement.metadata.creator}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                                      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter">
+                                        {firstElement.metadata.license}
+                                      </span>
+                                    </div>
+                                    <p className="text-[8px] text-indigo-400 font-bold italic leading-tight">
+                                      * Bu model Sketchfab üzerinden dinamik olarak yüklenmiştir. Lisans kurallarına uyunuz.
+                                    </p>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter">
-                                      {firstElement.metadata.license}
-                                    </span>
-                                  </div>
-                                  <p className="text-[8px] text-indigo-400 font-bold italic leading-tight">
-                                    * Bu model Sketchfab üzerinden dinamik olarak yüklenmiştir. Lisans kurallarına uyunuz.
-                                  </p>
                                 </div>
                               ) : (
                                 <>

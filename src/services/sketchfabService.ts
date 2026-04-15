@@ -56,20 +56,29 @@ export const getSketchfabDownloadUrl = async (uid: string, token?: string) => {
     const data = await response.json();
     
     // Format Priority: GLB/gltf first, then others
-    // Sketchfab API typically provides 'gltf' which is often a GLB file
+    // Sketchfab API provides a dictionary of formats
     let downloadUrl = null;
     
+    // Log available formats for debugging
+    console.log(`Available formats for ${uid}:`, Object.keys(data));
+
     if (data.glb) downloadUrl = data.glb.url;
     else if (data.gltf) downloadUrl = data.gltf.url;
     else if (data.source) downloadUrl = data.source.url;
     else {
-      // Fallback: take the first available format
-      const firstFormat = Object.values(data)[0] as any;
-      if (firstFormat && firstFormat.url) downloadUrl = firstFormat.url;
+      // Fallback: take the first available format that has a URL
+      const formats = Object.values(data);
+      for (const format of formats) {
+        if (format && typeof format === 'object' && (format as any).url) {
+          downloadUrl = (format as any).url;
+          break;
+        }
+      }
     }
 
     if (!downloadUrl) {
-      throw new Error('Model için uygun bir indirme formatı bulunamadı.');
+      console.error('No download URL found in data:', data);
+      throw new Error('Model için uygun bir indirme formatı bulunamadı (404).');
     }
 
     return downloadUrl;

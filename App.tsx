@@ -1,7 +1,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Users, Printer, ZoomIn, ZoomOut, Database, RefreshCw, MessageSquare, AlertCircle, Loader2, CheckCircle2, XCircle, Clock, Send, ChevronDown, MapPin, Tag, Layout, Sparkles, Edit2, AlertTriangle, Search, Upload, Plus, Trash2, Undo2, RotateCw, Copy, ArrowUp, ArrowDown, Group, Ungroup, AlignLeft, AlignRight, AlignStartVertical, AlignEndVertical, AlignCenter, AlignJustify, Minus, LayoutGrid, Ruler, Maximize2, Redo2, Settings2, Type, RotateCcw, Zap, Box } from 'lucide-react';
+import { Users, Printer, ZoomIn, ZoomOut, Database, RefreshCw, MessageSquare, AlertCircle, Loader2, CheckCircle2, XCircle, Clock, Send, ChevronDown, MapPin, Tag, Layout, Sparkles, Edit2, AlertTriangle, Search, Upload, Plus, Trash2, Undo2, RotateCw, Copy, ArrowUp, ArrowDown, Group, Ungroup, AlignLeft, AlignRight, AlignStartVertical, AlignEndVertical, AlignCenter, AlignJustify, Minus, LayoutGrid, Ruler, Maximize2, Redo2, Settings2, Type, RotateCcw, Zap, Box, X } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { PROTOCOL_DATA, HALL_CONFIGS, TURKEY_CITIES, CITY_HALLS } from './constants';
 import { motion } from 'motion/react';
@@ -13,9 +13,12 @@ import GuestModal from './components/GuestModal';
 import DataImportPanel from './components/DataImportPanel';
 import TelegramPreview from './components/TelegramPreview';
 import HallAnalysisPanel from './components/HallAnalysisPanel';
+import PascalEditor from './src/components/PascalEditor';
+import { useStore } from './src/store/useStore';
 import { AnimatePresence } from 'motion/react';
 
 import { getSketchfabDownloadUrl } from './src/services/sketchfabService';
+import { generateTrellisModel } from './src/apis/trellisApi';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://qorygwdwirbtqewhubze.supabase.co';
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvcnlnd2R3aXJidHFld2h1YnplIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDYyOTU1OCwiZXhwIjoyMDgwMjA1NTU4fQ.oeReAMn8O533IcPcDSg1QfzYTden72SyK677etV9ZaM';
@@ -53,7 +56,12 @@ const App: React.FC = () => {
   const [blockRows, setBlockRows] = useState(5);
   const [blockChairs, setBlockChairs] = useState(10);
   const [tableChairCount, setTableChairCount] = useState(8);
-  const [is3DMode, setIs3DMode] = useState(false);
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [cameraSettings, setCameraSettings] = useState({
+    height: 10,
+    fov: 45,
+    target: [0, 0, 0] as [number, number, number]
+  });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isTrellisGenerating, setIsTrellisGenerating] = useState(false);
   const [isSketchfabLoading, setIsSketchfabLoading] = useState(false);
@@ -63,17 +71,12 @@ const App: React.FC = () => {
   const [showDimensions, setShowDimensions] = useState(true);
   const [isPanning, setIsPanning] = useState(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+  
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [isDrawingDimension, setIsDrawingDimension] = useState(false);
   const [isTapeMeasuring, setIsTapeMeasuring] = useState(false);
   const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
   const [isDrawingSunAngle, setIsDrawingSunAngle] = useState(false);
-  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
-  const [cameraSettings, setCameraSettings] = useState({
-    height: 10,
-    fov: 45,
-    target: [0, 0, 0] as [number, number, number]
-  });
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [calibrationPoints, setCalibrationPoints] = useState<{x: number, y: number}[]>([]);
   const [calibrationModalOpen, setCalibrationModalOpen] = useState(false);
@@ -323,20 +326,30 @@ const App: React.FC = () => {
       combined[key] = { 
         ...HALL_CONFIGS[key], 
         elements: (HALL_CONFIGS[key] as any).elements || [],
-        referenceImages: (HALL_CONFIGS[key] as any).referenceImages || [],
-        viewMode: (HALL_CONFIGS[key] as any).viewMode || '2d'
+        referenceImages: (HALL_CONFIGS[key] as any).referenceImages || []
       };
     });
     Object.keys(dynamicHalls).forEach(key => {
       combined[key] = { 
         ...dynamicHalls[key], 
         elements: dynamicHalls[key].elements || [],
-        referenceImages: dynamicHalls[key].referenceImages || referenceImages,
-        viewMode: dynamicHalls[key].viewMode || viewMode
+        referenceImages: dynamicHalls[key].referenceImages || referenceImages
       };
     });
     return combined;
-  }, [dynamicHalls, referenceImages, viewMode]);
+  }, [dynamicHalls, referenceImages]);
+
+  const { elements: storeElements, setElements: setStoreElements, setProtocolList: setStoreProtocolList } = useStore();
+
+  useEffect(() => {
+    setStoreProtocolList(protocolList);
+  }, [protocolList, setStoreProtocolList]);
+
+  useEffect(() => {
+    if (allHallConfigs[selectedHall]?.elements) {
+      setStoreElements(allHallConfigs[selectedHall].elements || []);
+    }
+  }, [selectedHall, allHallConfigs, setStoreElements]);
 
   const pushToHistory = useCallback((config: HallConfig) => {
     setHistory(prev => {
@@ -1639,7 +1652,7 @@ const App: React.FC = () => {
     if (files.length === 0) return;
     
     setIsTrellisGenerating(true);
-    setIs3DMode(true); // Switch to 3D mode instantly
+    setViewMode('3d'); // Switch to 3D mode instantly
     
     // Find the placeholder element (currently selected one or labeled 'SAHNE')
     const currentHall = allHallConfigs[selectedHall] || dynamicHalls[selectedHall];
@@ -1669,11 +1682,8 @@ const App: React.FC = () => {
     }
 
     try {
-      // Simulated AI Generation (TRELLIS Pipeline)
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      // Simulated GLB result: A high-fidelity building model
-      const modelUrl = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTextured/glTF-Binary/BoxTextured.glb';
+      // 1. Trellis Yükleme Koruması: Dosya boyutu kontrolü API içinde yapılıyor
+      const result = await generateTrellisModel(firstFile);
       
       const newElement: HallElement = {
         id: `trellis-${Date.now()}`,
@@ -1684,39 +1694,35 @@ const App: React.FC = () => {
         height: placeholder?.height || 200,
         rotation: placeholder?.rotation || 0,
         h: placeholder?.h || 12,
-        modelUrl: modelUrl,
+        modelUrl: result.modelUrl,
         label: 'TRELLIS AI Digital Twin',
         color: '#ffffff',
         metadata: {
           source: 'TRELLIS AI',
-          originalType: placeholder?.type
+          originalType: placeholder?.type,
+          size: result.size
         }
       };
       
-      // 1. Auto-cleanup & 2. Add the new 3D model (Atomic update to avoid race conditions)
+      // 2. Sahne Temizliği: Placeholder'ı temizle
       if (currentHall) {
         let newElements = [...(currentHall.elements || [])];
         
-        // Remove placeholder if it exists
         if (placeholder) {
           newElements = newElements.filter(el => el.id !== placeholder.id);
         }
         
-        // Add the newly generated 3D model
         newElements.push(newElement);
-        
-        // Update the hall configuration
         updateHall({ ...currentHall, elements: newElements });
         
-        // 3. Focus Shift: Select the new object
         setSelectedElementIds(new Set([newElement.id]));
-        setIsRightPanelOpen(true); // Open properties panel
+        setIsRightPanelOpen(true);
       }
       
       setStatusMessage({ text: "3B Model başarıyla oluşturuldu ve sahneye eklendi.", type: 'success' });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Trellis error:", error);
-      setStatusMessage({ text: "3B Model üretimi başarısız oldu.", type: 'error' });
+      setStatusMessage({ text: error.message || "3B Model üretimi başarısız oldu.", type: 'error' });
     } finally {
       setIsTrellisGenerating(false);
       setTimeout(() => setStatusMessage(null), 3000);
@@ -1726,7 +1732,7 @@ const App: React.FC = () => {
   const handleSelectSketchfabModel = useCallback((model: { uid: string, name: string, creator: string, license: string }) => {
     // Logic moved to DrawingCanvas via CustomEvent 'add-3d-object'
     // We just ensure 3D mode is active
-    setIs3DMode(true);
+    setViewMode('3d');
   }, []);
 
   const handleModelPlaced = useCallback((x: number, y: number) => {
@@ -1812,74 +1818,22 @@ const App: React.FC = () => {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Top Toolbar */}
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-2 bg-white/90 backdrop-blur-2xl border-2 border-slate-100 rounded-3xl shadow-2xl shadow-slate-200/50">
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
-          <button
-            onClick={() => setViewMode('2d')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
-              viewMode === '2d' 
-                ? 'bg-white text-blue-600 shadow-lg shadow-blue-100' 
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4" /> 2D Görünüm
-          </button>
-          <button
-            onClick={() => setViewMode('3d')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
-              viewMode === '3d' 
-                ? 'bg-white text-blue-600 shadow-lg shadow-blue-100' 
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <Box className="w-4 h-4" /> 3D Görünüm
-          </button>
-        </div>
-        
-        <div className="w-px h-8 bg-slate-200 mx-2" />
-        
-        <div className="flex items-center gap-1">
-          <button 
-            onClick={() => setZoom(prev => Math.min(prev + 0.1, 2))}
-            className="p-2.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors"
-            title="Yakınlaştır"
-          >
-            <ZoomIn className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.2))}
-            className="p-2.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors"
-            title="Uzaklaştır"
-          >
-            <ZoomOut className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={() => {
-              setZoom(0.8);
-              setCameraSettings(prev => ({ ...prev, height: 10, fov: 45 }));
-            }}
-            className="p-2.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors"
-            title="Sıfırla"
-          >
-            <RefreshCw className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="w-px h-8 bg-slate-200 mx-2" />
-
-        <button 
-          onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
-          className={`p-2.5 rounded-xl transition-all ${
-            isRightPanelOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-slate-100 text-slate-500'
-          }`}
-          title="Ayarlar"
-        >
-          <Settings2 className="w-5 h-5" />
-        </button>
-      </div>
-
-      <Sidebar 
+        {activeLayoutTab === 'template' ? (
+          <div className="fixed inset-0 z-[9999] bg-white">
+            <div className="absolute top-6 right-6 z-[10000]">
+              <button 
+                onClick={() => setActiveLayoutTab('ai')}
+                className="p-3 bg-slate-900 text-white rounded-2xl shadow-2xl hover:bg-slate-800 transition-all flex items-center gap-2"
+              >
+                <X className="w-5 h-5" />
+                <span className="text-[11px] font-black uppercase tracking-widest pr-1">Editörden Çık</span>
+              </button>
+            </div>
+            <PascalEditor />
+          </div>
+        ) : (
+          <>
+            <Sidebar 
           data={filteredProtocolList} 
           selectedIds={selectedAttendeeIds} setSelectedIds={setSelectedAttendeeIds} 
           searchTerm={searchTerm} setSearchTerm={setSearchTerm} 
@@ -1938,8 +1892,8 @@ const App: React.FC = () => {
           setBlockChairs={setBlockChairs}
           tableChairCount={tableChairCount}
           setTableChairCount={setTableChairCount}
-          is3DMode={is3DMode}
-          setIs3DMode={setIs3DMode}
+          is3DMode={viewMode === '3d'}
+          onToggle3DMode={(val: boolean) => setViewMode(val ? '3d' : '2d')}
           isCollapsed={isSidebarCollapsed}
           setIsCollapsed={setIsSidebarCollapsed}
           onSmartAutoLayout={handleSmartAutoLayout}
@@ -1960,6 +1914,27 @@ const App: React.FC = () => {
               animate={{ y: 0, opacity: 1 }}
               className="bg-slate-900/40 hover:bg-slate-900/95 backdrop-blur-sm hover:backdrop-blur-xl border border-slate-700/30 hover:border-slate-700/50 rounded-2xl p-1 hover:p-2 shadow-lg hover:shadow-2xl flex items-center gap-1 hover:gap-2 transition-all duration-500 ease-in-out group-hover:scale-105"
             >
+              <div className="flex items-center gap-0.5 hover:gap-1 bg-slate-800/30 group-hover:bg-slate-800/50 rounded-xl p-0.5 hover:p-1 transition-all">
+                <button
+                  onClick={() => setViewMode('2d')}
+                  className={`p-1.5 group-hover:p-2.5 rounded-lg group-hover:rounded-xl transition-all flex items-center gap-2 ${viewMode === '2d' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  title="2D Görünüm"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 group-hover:w-4 h-4" />
+                  <span className="text-[9px] font-black uppercase tracking-widest hidden group-hover:block transition-all">2D</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('3d')}
+                  className={`p-1.5 group-hover:p-2.5 rounded-lg group-hover:rounded-xl transition-all flex items-center gap-2 ${viewMode === '3d' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                  title="3D Görünüm"
+                >
+                  <Box className="w-3.5 h-3.5 group-hover:w-4 h-4" />
+                  <span className="text-[9px] font-black uppercase tracking-widest hidden group-hover:block transition-all">3D</span>
+                </button>
+              </div>
+
+              <div className="w-px h-4 group-hover:h-6 bg-slate-700/30 group-hover:bg-slate-700/50 mx-0.5 group-hover:mx-1 transition-all" />
+
               <div className="flex items-center gap-0.5 hover:gap-1 bg-slate-800/30 group-hover:bg-slate-800/50 rounded-xl p-0.5 hover:p-1 transition-all">
                 <button 
                   onClick={() => setZoom(prev => Math.max(0.2, prev - 0.1))}
@@ -2044,7 +2019,11 @@ const App: React.FC = () => {
           </div>
 
             <div className="flex-1 w-full overflow-auto flex justify-center items-start pt-20 scrollbar-hide">
-                {(selectedHall && allHallConfigs[selectedHall]) || activeLayoutTab === 'draw' || activeLayoutTab === 'template' || activeLayoutTab === 'library' ? (
+                {activeLayoutTab === 'template' ? (
+                  <div className="w-full h-full absolute inset-0 z-50">
+                    <PascalEditor />
+                  </div>
+                ) : (selectedHall && allHallConfigs[selectedHall]) || activeLayoutTab === 'draw' || activeLayoutTab === 'library' ? (
                   <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className="transition-transform duration-300 ease-out p-12">
             <SeatingPlan 
               hall={allHallConfigs[selectedHall] || { 
@@ -2116,6 +2095,7 @@ const App: React.FC = () => {
               onUpdateReferenceImage={handleUpdateReferenceImage}
               pendingModel={pendingSketchfabModel}
               onModelPlaced={handleModelPlaced}
+              cameraSettings={cameraSettings}
             />
                   </div>
                 ) : (
@@ -2190,6 +2170,8 @@ const App: React.FC = () => {
             onRemoveReferenceImage={handleRemoveReferenceImage}
             onUpdateReferenceImage={handleUpdateReferenceImage}
             referenceImages={referenceImages}
+            onUpdateCameraSettings={(updates) => setCameraSettings(prev => ({ ...prev, ...updates }))}
+            cameraSettings={cameraSettings}
             onStartCalibration={(pixelDist) => {
               if (typeof pixelDist === 'number') {
                 setLastPixelDist(pixelDist);
@@ -2219,10 +2201,10 @@ const App: React.FC = () => {
             }}
             onStartFreeDraw={handleStartFreeDraw}
             getTemplateElements={getTemplateElements}
-            cameraSettings={cameraSettings}
-            onUpdateCameraSettings={(updates) => setCameraSettings(prev => ({ ...prev, ...updates }))}
           />
         </main>
+          </>
+        )}
       </div>
       <GuestModal 
         isOpen={guestModalOpen} 
